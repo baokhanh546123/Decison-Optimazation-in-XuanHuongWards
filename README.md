@@ -8,8 +8,6 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Active-success)]()
 
-**Case study:** Phường Xuân Hương – Đà Lạt, Việt Nam
-
 </div>
 
 ---
@@ -23,9 +21,8 @@
 | 3   | [Features](#features) |
 | 4   | [Project Structure](#structure) |
 | 5   | [Install & Run](#install-run) |
-| 6   | [Usage Example](#usage) |
-| 7   | [Citation](#citation) |
-| 8   | [License & Contact](#license) |
+| 6   | [Citation](#citation) |
+| 7   | [License & Contact](#license) |
 
 ---
 
@@ -68,37 +65,35 @@ Cho:
 #### Tập hợp (Sets)
 
 | Ký hiệu | Mô tả | Kích thước |
-|---------|-------|------------|
-| \(I\) | Tập các điểm nhu cầu (demand points) | \(\|I\| = n\) |
-| \(J\) | Tập các vị trí ứng viên (candidate locations) | \(\|J\| = m\) |
-| \(I_{\text{must}} \subseteq I\) | Tập demand bắt buộc phải được phủ (nếu có) | — |
+|:-------:|-------|:----------:|
+| **I** | Tập các điểm nhu cầu (demand points) | \|I\| = n |
+| **J** | Tập các vị trí ứng viên (candidate locations) | \|J\| = m |
+| **I<sub>must</sub>** ⊆ **I** | Tập demand bắt buộc phải được phủ (nếu có) | — |
 
 #### Tham số (Parameters)
 
 | Ký hiệu | Miền giá trị | Ý nghĩa |
-|---------|--------------|---------|
-| \(p_i\) | \(p_i \ge 0\) | Lợi nhuận (hoặc trọng số nhu cầu) tại demand \(i \in I\) |
-| \(c_j\) | \(c_j \ge 0\) | Chi phí mở cơ sở tại candidate \(j \in J\) |
-| \(a_{ij}\) | \(\{0,1\}\) | Ma trận phủ: \(a_{ij} = 1\) nếu candidate \(j\) phủ được demand \(i\) (khoảng cách \(\le\) bán kính phục vụ), ngược lại \(= 0\) |
-| \(B\) | \(B > 0\) | Ngân sách tối đa cho việc mở cơ sở |
-| \(P_{\max}\) | \(P_{\max} \in \mathbb{Z}^+\) | Số cơ sở tối đa được phép mở |
-| \(\alpha\) | \(\alpha \in [0,1]\) | Tỷ lệ phủ tối thiểu yêu cầu (theo trọng số hoặc theo số lượng) |
+|:-------:|:------------:|---------|
+| **p<sub>i</sub>** | p<sub>i</sub> ≥ 0 | Lợi nhuận (hoặc trọng số nhu cầu) tại demand *i* ∈ I |
+| **c<sub>j</sub>** | c<sub>j</sub> ≥ 0 | Chi phí mở cơ sở tại candidate *j* ∈ J |
+| **a<sub>ij</sub>** | {0, 1} | Ma trận phủ: a<sub>ij</sub> = 1 nếu candidate *j* phủ được demand *i* (khoảng cách ≤ bán kính phục vụ), ngược lại = 0 |
+| **B** | B > 0 | Ngân sách tối đa cho việc mở cơ sở |
+| **P<sub>max</sub>** | P<sub>max</sub> ∈ ℤ⁺ | Số cơ sở tối đa được phép mở |
+| **α** | α ∈ [0, 1] | Tỷ lệ phủ tối thiểu yêu cầu (theo trọng số hoặc theo số lượng) |
 
 #### Biến quyết định (Decision Variables)
 
-\[
-\begin{aligned}
-x_j &\in \{0,1\}, && \forall j \in J \\
-y_i &\in \{0,1\}, && \forall i \in I
-\end{aligned}
-\]
+```text
+xⱼ ∈ {0, 1}    ∀ j ∈ J
+yᵢ ∈ {0, 1}    ∀ i ∈ I
+```
 
 | Biến | Giá trị | Ý nghĩa |
-|------|---------|---------|
-| \(x_j = 1\) | Binary | Mở cơ sở tại vị trí ứng viên \(j\) |
-| \(x_j = 0\) | Binary | Không mở cơ sở tại \(j\) |
-| \(y_i = 1\) | Binary | Demand \(i\) được phủ bởi **ít nhất một** cơ sở được chọn |
-| \(y_i = 0\) | Binary | Demand \(i\) không được phủ |
+|:----:|:-------:|---------|
+| **x<sub>j</sub> = 1** | Binary | Mở cơ sở tại vị trí ứng viên *j* |
+| **x<sub>j</sub> = 0** | Binary | Không mở cơ sở tại *j* |
+| **y<sub>i</sub> = 1** | Binary | Demand *i* được phủ bởi **ít nhất một** cơ sở được chọn |
+| **y<sub>i</sub> = 0** | Binary | Demand *i* không được phủ |
 
 ---
 
@@ -106,35 +101,47 @@ y_i &\in \{0,1\}, && \forall i \in I
 
 **Mục tiêu 1 — Max Covering Profit**
 
-\[
-\max \; f_1(\mathbf{x},\mathbf{y}) = \sum_{i \in I} p_i \, y_i
-\]
+```text
+max  f₁(x, y) = Σ  pᵢ · yᵢ
+               i∈I
+```
 
 **Mục tiêu 2 — Min Cost** (hoặc Max Net Profit)
 
-\[
-\min \; f_2(\mathbf{x}) = \sum_{j \in J} c_j \, x_j
-\]
+```text
+min  f₂(x) = Σ  cⱼ · xⱼ
+            j∈J
+```
 
 hoặc dạng net profit:
 
-\[
-\max \; f_2'(\mathbf{x},\mathbf{y}) = \sum_{i \in I} p_i y_i - \sum_{j \in J} c_j x_j
-\]
+```text
+max  f₂'(x, y) = Σ  pᵢ · yᵢ  −  Σ  cⱼ · xⱼ
+                i∈I           j∈J
+```
 
 **Ràng buộc**
 
-\[
-\begin{align}
-& y_i \;\le\; \sum_{j \in J} a_{ij}\, x_j, && \forall i \in I && \text{(1) Logic covering} \\[6pt]
-& \sum_{i \in I} p_i y_i \;\ge\; \alpha \sum_{i \in I} p_i, && && \text{(2a) Phủ tối thiểu theo trọng số} \\[6pt]
-& \sum_{i \in I} y_i \;\ge\; \alpha \, |I|, && && \text{(2b) Phủ tối thiểu theo số lượng} \\[6pt]
-& y_i = 1, && \forall i \in I_{\text{must}} && \text{(2c) Demand bắt buộc} \\[6pt]
-& \sum_{j \in J} c_j x_j \;\le\; B, && && \text{(3a) Giới hạn ngân sách} \\[6pt]
-& \sum_{j \in J} x_j \;\le\; P_{\max}, && && \text{(3b) Giới hạn số cơ sở} \\[6pt]
-& x_j \in \{0,1\}, \quad y_i \in \{0,1\}, && \forall i \in I,\; j \in J && \text{(4) Binary}
-\end{align}
-\]
+```text
+(1)   yᵢ  ≤  Σ  aᵢⱼ · xⱼ          ∀ i ∈ I          (Logic covering)
+            j∈J
+
+(2a)  Σ  pᵢ · yᵢ  ≥  α · Σ  pᵢ                     (Phủ tối thiểu theo trọng số)
+     i∈I              i∈I
+
+(2b)  Σ  yᵢ  ≥  α · |I|                            (Phủ tối thiểu theo số lượng)
+     i∈I
+
+(2c)  yᵢ = 1                      ∀ i ∈ I_must     (Demand bắt buộc)
+
+(3a)  Σ  cⱼ · xⱼ  ≤  B                             (Giới hạn ngân sách)
+     j∈J
+
+(3b)  Σ  xⱼ  ≤  P_max                              (Giới hạn số cơ sở)
+     j∈J
+
+(4)   xⱼ ∈ {0,1},  yᵢ ∈ {0,1}     ∀ i ∈ I, j ∈ J   (Binary)
+```
 
 > **Ghi chú:** Ràng buộc (2a)/(2b)/(2c) và (3a)/(3b) là tùy chọn — tùy theo yêu cầu thực tế của bài toán mà kích hoạt.
 
@@ -144,8 +151,8 @@ hoặc dạng net profit:
 
 | Phương pháp | Mô tả ngắn | Phù hợp khi |
 |-------------|------------|-------------|
-| **Weighted Sum / Scalarization** | Gộp mục tiêu thành một hàm với trọng số \(\lambda_1, \lambda_2\) | Muốn giải nhanh bằng MILP (Gurobi, SCIP, CBC, PuLP) |
-| **ε-constraint / Augmented ε-constraint** | Giữ 1 mục tiêu chính, biến mục tiêu còn lại thành ràng buộc \(\varepsilon\) | Cần kiểm soát rõ ngân sách / chi phí theo từng kịch bản |
+| **Weighted Sum / Scalarization** | Gộp mục tiêu thành một hàm với trọng số λ₁, λ₂ | Muốn giải nhanh bằng MILP (Gurobi, SCIP, CBC, PuLP) |
+| **ε-constraint / Augmented ε-constraint** | Giữ 1 mục tiêu chính, biến mục tiêu còn lại thành ràng buộc ε | Cần kiểm soát rõ ngân sách / chi phí theo từng kịch bản |
 | **MOEA (NSGA-II, NSGA-III, MOEA/D, MOPSO)** | Thuật toán tiến hóa đa mục tiêu, sinh Pareto front | Bài lớn, cần nhiều phương án trade-off cho Decision Maker |
 
 **Quy trình Decision Intelligence trong hệ thống:**
@@ -173,13 +180,21 @@ hoặc dạng net profit:
 ```text
 Decison-Optimazation-in-XuanHuongWards/
 ├── src/
+    └── data/
+│       ├── bounary/            
+│       ├── Xuanhuongward
+    └── frontend/
+│       ├── temple             
+│       ├── static
+│       ├── js/
+│       ├── asset/                
+              
 │   └── backend/
-│       ├── main.py              # Entry point
+│       ├── main.py              
 │       ├── requirements.txt
-│       ├── models/              # Mô hình toán học & solver
-│       ├── data/                # Demand, candidate, ma trận phủ
-│       └── utils/               # Helper functions
-├── docs/                        # Tài liệu bổ sung
+│       ├── models/              
+│       ├── dataclass/                
+│       └── utils/               
 ├── README.md
 └── ...
 ```
@@ -223,35 +238,9 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
-
-Sau khi chạy, hệ thống sẽ:
-
-1. Load dữ liệu demand & candidate của khu vực Xuân Hương  
-2. Xây dựng mô hình MO-MCLP  
-3. Giải bài toán và xuất tập nghiệm Pareto / nghiệm tối ưu theo tham số  
-4. In kết quả ra console (và có thể xuất file / bản đồ tùy cấu hình)
-
 ---
 
-## <a id="usage">6. Usage Example</a>
-
-```python
-# Ví dụ cấu hình nhanh (trong main.py hoặc config)
-config = {
-    "alpha": 0.8,          # phủ tối thiểu 80% nhu cầu
-    "P_max": 5,            # tối đa 5 cơ sở
-    "budget": None,        # hoặc giới hạn ngân sách
-    "method": "epsilon",   # "weighted" | "epsilon" | "nsga2"
-}
-
-# Chạy tối ưu
-results = solve_mo_mclp(config)
-print(results.pareto_front)
-```
-
----
-
-## <a id="citation">7. Citation</a>
+## <a id="citation">6. Citation</a>
 
 Nếu bạn sử dụng mã nguồn hoặc ý tưởng từ dự án này, vui lòng trích dẫn các công trình liên quan:
 
@@ -290,11 +279,11 @@ Nếu bạn sử dụng mã nguồn hoặc ý tưởng từ dự án này, vui l
 
 ---
 
-## <a id="license">8. License & Contact</a>
+## <a id="license">7. License & Contact</a>
 
 - **License:** MIT (hoặc cập nhật theo repo chính thức)
 - **Repository:** [github.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards](https://github.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards)
 - **Case study area:** Phường Xuân Hương, Đà Lạt, Lâm Đồng, Việt Nam
-- **Author:** Khanh Tran, Tien Luu
+- **Author:** Khánh Trần , Tiên Lưu
 
 ---

@@ -44,7 +44,7 @@ Cho:
 
 - Tập **Demand Set** \(I\): các khu vực / khách hàng có nhu cầu.
 - Tập **Candidate Set** \(J\): các vị trí ứng viên có thể mở cơ sở.
-- Tham số: lợi nhuận \(p_i\) (hoặc nhu cầu \(d_i\)), chi phí \(c_j\), ma trận phủ \(a_{ij}\) (1 nếu \(j\) phủ được \(i\)).
+- Tham số: lợi nhuận (p<sub>i</sub>) (hoặc nhu cầu d<sub>i</sub>), chi phí c<sub>i</sub>, ma trận phủ a<sub>ij</sub> (1 nếu <i>j</i> phủ được <i>i</i>).
 
 **Yêu cầu:** Chọn tập con các candidate để mở cơ sở sao cho:
 

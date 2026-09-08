@@ -3,547 +3,336 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MCLP Scrollytelling · Multi-Objective Optimization</title>
-  <!-- Google Fonts: Inter -->
+  <title>MCLP Runner · Tối ưu vị trí kinh doanh</title>
+  <!-- Google Fonts: Inter + JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    /* ----- RESET & BASE ----- */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    :root {
-      --bg: #070b14;
-      --bg-elevated: #0d1424;
-      --text: #e8eef8;
-      --text-muted: #8fa3bc;
-      --accent: #5bb8f5;
-      --accent-soft: rgba(91, 184, 245, 0.14);
-      --accent-border: rgba(91, 184, 245, 0.28);
-      --warm: #f0b27a;
-      --warm-soft: rgba(240, 178, 122, 0.18);
-      --success: #4ade80;
-      --surface: rgba(255, 255, 255, 0.04);
-      --border: rgba(255, 255, 255, 0.07);
-      --radius: 14px;
-    }
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.65;
-      overflow-x: hidden;
-      -webkit-font-smoothing: antialiased;
-    }
-    a {
-      color: var(--accent);
-      text-decoration: none;
-      transition: color 0.2s ease;
-    }
-    a:hover {
-      color: #9ad4ff;
-    }
-
-    /* ----- LAYOUT 2 CỘT ----- */
-    .app {
-      display: flex;
-      min-height: 100vh;
-      position: relative;
-    }
-
-    /* Cột trái - text */
-    .text-col {
-      width: 42%;
-      padding: 0 2.75rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding-top: 18vh;
-      padding-bottom: 18vh;
-      position: relative;
-      z-index: 2;
-      background: linear-gradient(90deg, rgba(7, 11, 20, 0.92) 0%, rgba(7, 11, 20, 0.55) 85%, transparent 100%);
-    }
-    .section-text {
-      min-height: 135vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 3.5rem 0;
-      border-bottom: 1px solid var(--border);
-      opacity: 0;
-      transform: translateY(24px);
-      transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    .section-text.active {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .section-text .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-size: 0.68rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--accent);
-      background: var(--accent-soft);
-      padding: 0.28rem 0.9rem;
-      border-radius: 999px;
-      border: 1px solid var(--accent-border);
-      width: fit-content;
-      margin-bottom: 1rem;
-      backdrop-filter: blur(8px);
-    }
-    .section-text h2 {
-      font-size: clamp(1.75rem, 3.2vw, 2.85rem);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      line-height: 1.18;
-      margin-bottom: 1.1rem;
-      background: linear-gradient(135deg, #f4f0e8 0%, #b8d4f0 55%, #8ec5f0 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .section-text p {
-      font-size: clamp(0.95rem, 1.05vw, 1.1rem);
-      color: var(--text-muted);
-      max-width: 38ch;
-    }
-    .section-text .highlight {
-      color: var(--warm);
-      font-weight: 500;
-    }
-    .section-text .formula {
-      background: var(--surface);
-      border-radius: 10px;
-      padding: 0.9rem 1.25rem;
-      margin: 1rem 0;
-      font-family: 'JetBrains Mono', 'Courier New', monospace;
-      font-size: 0.85rem;
-      border-left: 3px solid var(--accent);
-      color: #c5d4e8;
-      overflow-x: auto;
-      white-space: nowrap;
-      backdrop-filter: blur(6px);
-    }
-    .stat-row {
-      display: flex;
-      gap: 1.25rem;
-      margin-top: 1.25rem;
-      flex-wrap: wrap;
-    }
-    .stat-pill {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0.65rem 1.1rem;
-      min-width: 110px;
-      backdrop-filter: blur(8px);
-    }
-    .stat-pill .label {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      margin-bottom: 0.2rem;
-    }
-    .stat-pill .value {
-      font-size: 1.35rem;
-      font-weight: 700;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-pill .value.accent { color: var(--accent); }
-    .stat-pill .value.warm { color: var(--warm); }
-    .stat-pill .value.success { color: var(--success); }
-
-    /* Cột phải - canvas 3D */
-    .scene-col {
-      position: sticky;
-      top: 0;
-      right: 0;
-      width: 58%;
-      height: 100vh;
-      overflow: hidden;
-      flex-shrink: 0;
-      background: radial-gradient(ellipse at 60% 40%, #10182a 0%, #070b14 70%);
-      z-index: 1;
-    }
-    .scene-col canvas {
-      display: block;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Overlay HUD trên scene */
-    .scene-hud {
-      position: absolute;
-      top: 1.25rem;
-      right: 1.25rem;
-      z-index: 5;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-    .scene-hud.visible {
-      opacity: 1;
-    }
-    .hud-chip {
-      background: rgba(10, 16, 28, 0.75);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.5rem 0.85rem;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      backdrop-filter: blur(12px);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .hud-chip strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-    .hud-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 8px var(--accent);
-    }
-
-    /* Section progress dots */
-    .section-nav {
-      position: fixed;
-      left: 1.1rem;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-    }
-    .section-nav button {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      border: 1.5px solid rgba(255,255,255,0.25);
-      background: transparent;
-      cursor: pointer;
-      padding: 0;
-      transition: all 0.25s ease;
-    }
-    .section-nav button.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      box-shadow: 0 0 10px rgba(91, 184, 245, 0.55);
-      transform: scale(1.25);
-    }
-    .section-nav button:hover {
-      border-color: var(--accent);
-    }
-
-    /* Footer */
-    .footer-section {
-      min-height: 32vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 3.5rem 2rem;
-      border-top: 1px solid var(--border);
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      text-align: center;
-      width: 100%;
-      gap: 1.1rem;
-    }
-    .footer-section h3 {
-      color: var(--text);
-      font-weight: 500;
-      font-size: 1.15rem;
-    }
-    .footer-section .cta-btn {
-      background: linear-gradient(135deg, #5bb8f5, #3d9ee0);
-      border: none;
-      padding: 0.85rem 2.4rem;
-      border-radius: 999px;
-      font-weight: 600;
-      color: #061018;
-      cursor: pointer;
-      font-size: 0.95rem;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 4px 20px rgba(91, 184, 245, 0.3);
-    }
-    .footer-section .cta-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 28px rgba(91, 184, 245, 0.45);
-    }
-    .footer-section .cta-btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 3px;
-    }
-
-    /* Scroll progress bar */
-    .scroll-progress-bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #5bb8f5, #f0b27a);
-      z-index: 9999;
-      width: 0%;
-      transition: width 0.08s linear;
-      box-shadow: 0 0 12px rgba(91, 184, 245, 0.5);
-    }
-
-    /* ----- RESPONSIVE ----- */
-    @media (max-width: 1024px) {
-      .text-col {
-        width: 46%;
-        padding: 0 1.75rem;
-      }
-      .scene-col {
-        width: 54%;
-      }
-      .section-nav {
-        left: 0.6rem;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .app {
-        flex-direction: column;
-      }
-      .text-col {
-        width: 100%;
-        padding: 1.25rem 1.35rem;
-        padding-top: 1.5rem;
-        background: none;
-      }
-      .scene-col {
-        position: relative;
-        top: auto;
-        right: auto;
-        width: 100%;
-        height: 52vh;
-        flex-shrink: 0;
-        order: -1;
-      }
-      .section-text {
-        min-height: 70vh;
-        padding: 2rem 0;
-      }
-      .section-text p {
-        max-width: 100%;
-      }
-      .section-nav {
-        display: none;
-      }
-      .scene-hud {
-        top: 0.75rem;
-        right: 0.75rem;
-      }
-    }
-
-    /* Reduced motion */
-    @media (prefers-reduced-motion: reduce) {
-      .section-text {
-        opacity: 1 !important;
-        transform: none !important;
-        transition: none !important;
-      }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/index.css">
 </head>
 <body>
-
+  <!-- ===== SCROLL PROGRESS BAR ===== -->
   <div class="scroll-progress-bar" id="scrollProgressBar"></div>
 
-  <!-- Section navigation dots -->
+  <!-- ===== TOPBAR ===== -->
+  <header class="topbar" id="topbar">
+    <a href="#" class="topbar__brand">
+      <span class="topbar__dot"></span>
+      MCLP Runner
+    </a>
+    <nav class="topbar__nav">
+      <a href="#hero">Trang chủ</a>
+      <a href="#challenges">Bài toán</a>
+      <a href="#scrolly">Mô hình 3D</a>
+      <a href="#team">Đội ngũ</a>
+      <a href="#contact">Liên hệ</a>
+    </nav>
+    <a href="#scrolly" class="topbar__cta">Khám phá mô hình</a>
+    <button class="topbar__menu-btn" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </header>
+
+  <!-- ===== HERO (marketing) ===== -->
+  <section class="hero" id="hero">
+    <div class="container">
+      <div class="hero__inner">
+        <p class="hero__eyebrow"><b>Decision Optimization</b> · MCLP Framework</p>
+        <h1>Tối ưu hóa vị trí kinh doanh bằng <span class="accent">Bài toán Bao phủ Cực đại (MCLP)</span></h1>
+        <p class="hero__sub">Đưa ra quyết định mở địa điểm chính xác, cắt giảm chi phí đầu tư và tối đa hóa tiếp cận khách hàng dựa trên dữ liệu.</p>
+        <p class="hero__body">Trong chiến lược mở rộng mạng lưới, chọn đúng vị trí quyết định 80% sự thành công. Hệ thống Decision Optimization ứng dụng mô hình MCLP (Maximal Covering Location Problem) giúp các doanh nghiệp xác định chính xác số lượng và vị trí đặt cửa hàng, kho bãi hoặc trung tâm dịch vụ nhằm bao phủ thị trường tối đa với nguồn lực tối ưu.</p>
+        <div class="hero__actions">
+          <a href="#scrolly" class="btn-primary">Xem mô hình 3D</a>
+          <a href="#contact" class="btn-ghost">Tư vấn giải pháp</a>
+        </div>
+        <p class="hero__fud">Không ràng buộc · Tư vấn khám phá 15 phút · <span>Dữ liệu giữ bí mật</span></p>
+        <div class="hero__proof">
+          <div class="proof-item">
+            <span class="proof-item__val">80%</span>
+            <span class="proof-item__label">Thành công phụ thuộc vị trí</span>
+          </div>
+          <div class="proof-item">
+            <span class="proof-item__val">3</span>
+            <span class="proof-item__label">Mục tiêu tối ưu đồng thời</span>
+          </div>
+          <div class="proof-item">
+            <span class="proof-item__val">Pareto</span>
+            <span class="proof-item__label">Trade-off Cost ↔ Coverage</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CHALLENGES (marketing) ===== -->
+  <section class="marketing-section" id="challenges">
+    <div class="container">
+      <p class="section__eyebrow">Bài toán thực tế</p>
+      <h2 class="section__title">Thách thức kinh doanh trong việc lựa chọn địa điểm</h2>
+      <p class="section__intro">Trước khi mở rộng mạng lưới kinh doanh tại các khu vực đô thị trọng điểm, doanh nghiệp thường gặp phải những vướng mắc chiến lược:</p>
+      <div class="challenge-grid">
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3>Xung đột giữa Chi phí &amp; Bán kính bao phủ</h3>
+          <p>Mở quá nhiều điểm để phủ khách hàng sẽ làm bùng nổ chi phí vận hành (CapEx/OpEx). Mở quá ít điểm lại tạo cơ hội cho đối thủ chiếm lĩnh thị phần.</p>
+        </div>
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M9 12h6"/></svg>
+          </div>
+          <h3>Lãng phí khoảng chồng lấp (Overlap)</h3>
+          <p>Đặt các chi nhánh quá gần nhau dẫn đến việc tự tranh giành khách hàng của chính mình (Cannibalization).</p>
+        </div>
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V10l7-7 7 7v11"/><path d="M9 21v-6h6v6"/></svg>
+          </div>
+          <h3>Mật độ dân số &amp; Giao thông không đồng đều</h3>
+          <p>Dữ liệu dân cư và hạ tầng thay đổi theo từng quận/phường, đòi hỏi tính toán khoa học thay vì ra quyết định dựa trên cảm tính.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 3D SCROLLYTELLING SECTION (from index.html) ===== -->
+  <section class="scrolly-section" id="scrolly">
+    <div class="scrolly-inner">
+
+      <!-- CỘT TEXT (trái) -->
+      <div class="text-col" id="textCol">
+
+        <!-- Section 0 - Hero -->
+        <div class="section-text" data-section="0">
+          <span class="badge">🧭 MCLP</span>
+          <h2>Maximal Covering Location Problem</h2>
+          <p>
+            Tối ưu hóa vị trí đặt cơ sở dịch vụ để phủ tối đa nhu cầu với chi phí
+            nhỏ nhất. Đây là bài toán <span class="highlight">multi‑objective</span>
+            trong quy hoạch đô thị.
+          </p>
+          <p style="margin-top:0.9rem; font-size:0.88rem; color:#6a8098;">
+            Cuộn xuống để khám phá các bước giải quyết.
+          </p>
+        </div>
+
+        <!-- Section 1 - City Context -->
+        <div class="section-text" data-section="1">
+          <span class="badge">🏙️ Bối cảnh</span>
+          <h2>Thành phố thông minh</h2>
+          <p>
+            Chúng ta cần đặt các trạm dịch vụ (cứu hỏa, y tế, wifi) trong một khu
+            đô thị giả định. Mỗi điểm dân cư có nhu cầu khác nhau, và mỗi trạm chỉ
+            phủ được trong bán kính <span class="highlight">R</span>.
+          </p>
+        </div>
+
+        <!-- Section 2 - Demand Points -->
+        <div class="section-text" data-section="2">
+          <span class="badge">📍 Nhu cầu</span>
+          <h2>Điểm dân cư (Demand Points)</h2>
+          <p>
+            Mỗi chấm màu thể hiện một khu vực có nhu cầu <span class="highlight">w<sub>i</sub></span>.
+            Màu càng đậm → nhu cầu càng cao.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Số điểm</div>
+              <div class="value accent" id="demandCount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3 - Candidate Sites -->
+        <div class="section-text" data-section="3">
+          <span class="badge">📌 Ứng viên</span>
+          <h2>Các vị trí khả dĩ</h2>
+          <p>
+            <span class="highlight">Candidate sites</span> là nơi có thể đặt trạm
+            (biến quyết định <span class="highlight">x<sub>j</sub> ∈ {0,1}</span>).
+            Mỗi vị trí sẽ được đánh giá qua hai mục tiêu.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Ứng viên</div>
+              <div class="value accent" id="candidateCount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4 - Coverage Radius -->
+        <div class="section-text" data-section="4">
+          <span class="badge">⭕ Bán kính phủ</span>
+          <h2>Coverage Radius <span style="font-weight:400;">R</span></h2>
+          <p>
+            Khi cuộn, mỗi ứng viên sẽ "nở" ra vòng tròn bán kính R. Những điểm
+            nằm trong vòng tròn sẽ được <span class="highlight">phủ</span> và
+            chuyển sang màu xanh.
+          </p>
+          <div class="formula">
+            covered<sub>i</sub> = 1 &nbsp;⇔&nbsp; ∃ j: x<sub>j</sub> = 1 và dist(i,j) ≤ R
+          </div>
+        </div>
+
+        <!-- Section 5 - Objective 1 -->
+        <div class="section-text" data-section="5">
+          <span class="badge">🎯 Mục tiêu 1</span>
+          <h2>Tối đa phủ sóng</h2>
+          <p>
+            <span class="highlight">Maximize</span> tổng nhu cầu được phủ:
+          </p>
+          <div class="formula">
+            max Σ w<sub>i</sub> · covered<sub>i</sub>
+          </div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Điểm được phủ</div>
+              <div class="value success" id="coveredCounter">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 6 - Objective 2 -->
+        <div class="section-text" data-section="6">
+          <span class="badge">💰 Mục tiêu 2</span>
+          <h2>Giảm chi phí</h2>
+          <p>
+            <span class="highlight">Minimize</span> số lượng cơ sở được chọn (hoặc
+            chi phí mở):
+          </p>
+          <div class="formula">
+            min Σ c<sub>j</sub> · x<sub>j</sub>
+          </div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Cơ sở hoạt động</div>
+              <div class="value warm" id="facilityCounter">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7 - Pareto Front -->
+        <div class="section-text" data-section="7">
+          <span class="badge">📈 Pareto Front</span>
+          <h2>Đường cong trade‑off</h2>
+          <p>
+            Các nghiệm tối ưu Pareto (không bị trội) tạo thành mặt biên. Mỗi chấm
+            là một giải pháp khả thi. Chấm <span class="highlight">sáng</span> là
+            non‑dominated.
+          </p>
+        </div>
+
+        <!-- Section 8 - Optimal Solution -->
+        <div class="section-text" data-section="8">
+          <span class="badge">✅ Nghiệm chọn</span>
+          <h2>Giải pháp cuối cùng</h2>
+          <p>
+            Dựa trên ưu tiên của nhà quy hoạch, ta chọn một nghiệm trên Pareto
+            front. Trên bản đồ, các facility được chọn sẽ phát sáng.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Coverage</div>
+              <div class="value success"><span id="finalCoverage">0</span>%</div>
+            </div>
+            <div class="stat-pill">
+              <div class="label">Số trạm</div>
+              <div class="value warm" id="finalFacilities">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer inside scrolly -->
+        <div class="footer-section">
+          <h3>📊 Dữ liệu từ solver</h3>
+          <p style="max-width:42ch; margin:0 auto; color:var(--text-muted);">
+            Bài toán giải bằng <a href="#">NSGA‑II</a>
+            với 200 thế hệ. Tham khảo nguồn dữ liệu và paper bên dưới.
+          </p>
+          <button class="cta-btn" type="button">📄 Xem báo cáo</button>
+          <div style="font-size:0.72rem; color:#4a5a6e; margin-top:0.5rem;">
+            © 2026 — Scrollytelling MCLP · Three.js + GSAP
+          </div>
+        </div>
+
+      </div><!-- /text-col -->
+
+      <!-- CỘT 3D (phải) -->
+      <div class="scene-col" id="sceneCol">
+        <div class="scene-hud" id="sceneHud">
+          <div class="hud-chip"><span class="hud-dot"></span> <strong id="hudSection">Scene</strong></div>
+          <div class="hud-chip">R ≈ <strong id="hudRadius">—</strong></div>
+        </div>
+      </div>
+
+    </div><!-- /scrolly-inner -->
+  </section>
+
+  <!-- ===== TEAM (marketing) ===== -->
+  <section class="marketing-section" id="team">
+    <div class="container">
+      <p class="section__eyebrow">Đội ngũ</p>
+      <h2 class="section__title">Chuyên gia &amp; Thành viên Dự án</h2>
+      <p class="section__intro">Nhóm chuyên gia tối ưu hóa, khoa học dữ liệu và kỹ thuật phần mềm đứng sau mô hình MCLP Runner.</p>
+      <div class="team-grid">
+        <div class="team-card">
+          <div class="team-card__avatar">TV1</div>
+          <h3>[Tên Thành Viên 1]</h3>
+          <p class="team-card__role">Project Manager / Data Scientist</p>
+          <p>Chịu trách nhiệm: Xây dựng bài toán toán học, tối ưu thuật toán MCLP.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV2</div>
+          <h3>[Tên Thành Viên 2]</h3>
+          <p class="team-card__role">OR/Optimization Specialist</p>
+          <p>Chịu trách nhiệm: Phát triển mô hình Multi-objective, xử lý ràng buộc tuyến tính / phi tuyến.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV3</div>
+          <h3>[Tên Thành Viên 3]</h3>
+          <p class="team-card__role">GIS &amp; Data Engineer</p>
+          <p>Chịu trách nhiệm: Thu thập, làm sạch và xử lý dữ liệu không gian tại Khu vực A.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV4</div>
+          <h3>[Tên Thành Viên 4]</h3>
+          <p class="team-card__role">Full-stack / UI-UX Developer</p>
+          <p>Chịu trách nhiệm: Thiết kế giao diện Dashboard tương tác và tích hợp mô hình lên hệ thống Web.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FINAL CTA (marketing) ===== -->
+  <section class="final-cta" id="contact">
+    <div class="container">
+      <div class="final-cta__inner">
+        <h2>Sẵn sàng tối ưu mạng lưới địa điểm của bạn?</h2>
+        <p>Khám phá mô hình MCLP Runner — xem các kịch bản Pareto, so sánh chi phí và tỷ lệ bao phủ, đưa ra quyết định dựa trên dữ liệu thay vì cảm tính.</p>
+        <div class="final-cta__actions">
+          <a href="#scrolly" class="btn-primary">Xem mô hình 3D</a>
+          <a href="mailto:contact@mclp-runner.local" class="btn-ghost">Tư vấn giải pháp</a>
+        </div>
+        <p class="final-cta__fud">Không ràng buộc · Tư vấn khám phá 15 phút · <span>Dữ liệu giữ bí mật</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="container">
+      <p>© 2026 MCLP Runner · Decision Optimization. All rights reserved.</p>
+      <p>MCLP Decision Optimization Framework for Business Location Problem.</p>
+    </div>
+  </footer>
+
+  <!-- ===== Section nav dots (scrolly) ===== -->
   <nav class="section-nav" id="sectionNav" aria-label="Điều hướng section">
     <!-- filled by JS -->
   </nav>
 
-  <div class="app" id="app">
-
-    <!-- CỘT TEXT (trái) -->
-    <div class="text-col" id="textCol">
-
-      <!-- Section 0 - Hero -->
-      <div class="section-text" data-section="0">
-        <span class="badge">🧭 MCLP</span>
-        <h2>Maximal Covering Location Problem</h2>
-        <p>
-          Tối ưu hóa vị trí đặt cơ sở dịch vụ để phủ tối đa nhu cầu với chi phí
-          nhỏ nhất. Đây là bài toán <span class="highlight">multi‑objective</span>
-          trong quy hoạch đô thị.
-        </p>
-        <p style="margin-top:0.9rem; font-size:0.88rem; color:#6a8098;">
-          Cuộn xuống để khám phá các bước giải quyết.
-        </p>
-      </div>
-
-      <!-- Section 1 - City Context -->
-      <div class="section-text" data-section="1">
-        <span class="badge">🏙️ Bối cảnh</span>
-        <h2>Thành phố thông minh</h2>
-        <p>
-          Chúng ta cần đặt các trạm dịch vụ (cứu hỏa, y tế, wifi) trong một khu
-          đô thị giả định. Mỗi điểm dân cư có nhu cầu khác nhau, và mỗi trạm chỉ
-          phủ được trong bán kính <span class="highlight">R</span>.
-        </p>
-      </div>
-
-      <!-- Section 2 - Demand Points -->
-      <div class="section-text" data-section="2">
-        <span class="badge">📍 Nhu cầu</span>
-        <h2>Điểm dân cư (Demand Points)</h2>
-        <p>
-          Mỗi chấm màu thể hiện một khu vực có nhu cầu <span class="highlight">w<sub>i</sub></span>.
-          Màu càng đậm → nhu cầu càng cao.
-        </p>
-        <div class="stat-row">
-          <div class="stat-pill">
-            <div class="label">Số điểm</div>
-            <div class="value accent" id="demandCount">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 3 - Candidate Sites -->
-      <div class="section-text" data-section="3">
-        <span class="badge">📌 Ứng viên</span>
-        <h2>Các vị trí khả dĩ</h2>
-        <p>
-          <span class="highlight">Candidate sites</span> là nơi có thể đặt trạm
-          (biến quyết định <span class="highlight">x<sub>j</sub> ∈ {0,1}</span>).
-          Mỗi vị trí sẽ được đánh giá qua hai mục tiêu.
-        </p>
-        <div class="stat-row">
-          <div class="stat-pill">
-            <div class="label">Ứng viên</div>
-            <div class="value accent" id="candidateCount">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 4 - Coverage Radius -->
-      <div class="section-text" data-section="4">
-        <span class="badge">⭕ Bán kính phủ</span>
-        <h2>Coverage Radius <span style="font-weight:400;">R</span></h2>
-        <p>
-          Khi cuộn, mỗi ứng viên sẽ "nở" ra vòng tròn bán kính R. Những điểm
-          nằm trong vòng tròn sẽ được <span class="highlight">phủ</span> và
-          chuyển sang màu xanh.
-        </p>
-        <div class="formula">
-          covered<sub>i</sub> = 1  &nbsp;⇔&nbsp;  ∃ j:  x<sub>j</sub> = 1  và  dist(i,j) ≤ R
-        </div>
-      </div>
-
-      <!-- Section 5 - Objective 1 -->
-      <div class="section-text" data-section="5">
-        <span class="badge">🎯 Mục tiêu 1</span>
-        <h2>Tối đa phủ sóng</h2>
-        <p>
-          <span class="highlight">Maximize</span> tổng nhu cầu được phủ:
-        </p>
-        <div class="formula">
-          max  Σ w<sub>i</sub> · covered<sub>i</sub>
-        </div>
-        <div class="stat-row">
-          <div class="stat-pill">
-            <div class="label">Điểm được phủ</div>
-            <div class="value success" id="coveredCounter">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 6 - Objective 2 -->
-      <div class="section-text" data-section="6">
-        <span class="badge">💰 Mục tiêu 2</span>
-        <h2>Giảm chi phí</h2>
-        <p>
-          <span class="highlight">Minimize</span> số lượng cơ sở được chọn (hoặc
-          chi phí mở):
-        </p>
-        <div class="formula">
-          min  Σ c<sub>j</sub> · x<sub>j</sub>
-        </div>
-        <div class="stat-row">
-          <div class="stat-pill">
-            <div class="label">Cơ sở hoạt động</div>
-            <div class="value warm" id="facilityCounter">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 7 - Pareto Front -->
-      <div class="section-text" data-section="7">
-        <span class="badge">📈 Pareto Front</span>
-        <h2>Đường cong trade‑off</h2>
-        <p>
-          Các nghiệm tối ưu Pareto (không bị trội) tạo thành mặt biên. Mỗi chấm
-          là một giải pháp khả thi. Chấm <span class="highlight">sáng</span> là
-          non‑dominated.
-        </p>
-      </div>
-
-      <!-- Section 8 - Optimal Solution -->
-      <div class="section-text" data-section="8">
-        <span class="badge">✅ Nghiệm chọn</span>
-        <h2>Giải pháp cuối cùng</h2>
-        <p>
-          Dựa trên ưu tiên của nhà quy hoạch, ta chọn một nghiệm trên Pareto
-          front. Trên bản đồ, các facility được chọn sẽ phát sáng.
-        </p>
-        <div class="stat-row">
-          <div class="stat-pill">
-            <div class="label">Coverage</div>
-            <div class="value success"><span id="finalCoverage">0</span>%</div>
-          </div>
-          <div class="stat-pill">
-            <div class="label">Số trạm</div>
-            <div class="value warm" id="finalFacilities">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Footer -->
-      <div class="footer-section">
-        <h3>📊 Dữ liệu từ solver</h3>
-        <p style="max-width:42ch; margin:0 auto; color:var(--text-muted);">
-          Bài toán giải bằng <a href="#">NSGA‑II</a>
-          với 200 thế hệ. Tham khảo nguồn dữ liệu và paper bên dưới.
-        </p>
-        <button class="cta-btn" type="button">📄 Xem báo cáo</button>
-        <div style="font-size:0.72rem; color:#4a5a6e; margin-top:0.5rem;">
-          © 2026 — Scrollytelling MCLP · Three.js + GSAP
-        </div>
-      </div>
-
-    </div><!-- /text-col -->
-
-    <!-- CỘT 3D (phải) -->
-    <div class="scene-col" id="sceneCol">
-      <div class="scene-hud" id="sceneHud">
-        <div class="hud-chip"><span class="hud-dot"></span> <strong id="hudSection">Scene</strong></div>
-        <div class="hud-chip">R ≈ <strong id="hudRadius">—</strong></div>
-      </div>
-    </div>
-
-  </div><!-- /app -->
-
+  <!-- ===== SCRIPTS ===== -->
   <script type="importmap">
     {
       "imports": {
@@ -553,1559 +342,7 @@
     }
   </script>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import gsap from 'https://cdn.esm.sh/gsap@3.12.2';
-    import { ScrollTrigger } from 'https://cdn.esm.sh/gsap@3.12.2/ScrollTrigger.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    // (tuỳ chọn) nén mesh
-    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+  <script type="module" src="/js/index.js"></script>
 
-    gsap.registerPlugin(ScrollTrigger);
-
-    // ================================================================
-    // DOM REFS
-    // ================================================================
-    const sceneCol = document.getElementById('sceneCol');
-    const textCol = document.getElementById('textCol');
-    const sections = document.querySelectorAll('.section-text');
-    const progressBar = document.getElementById('scrollProgressBar');
-    const sceneHud = document.getElementById('sceneHud');
-    const hudSection = document.getElementById('hudSection');
-    const hudRadius = document.getElementById('hudRadius');
-    const sectionNav = document.getElementById('sectionNav');
-
-
-    // ================================================================
-    // GLB LOADER (poly.pizza City Kit)
-    // Đường dẫn tương đối từ file HTML. Cấu trúc gợi ý:
-    //   src/frontend/asset/building/*.glb
-    //   hoặc asset/City Kit-glb/*.glb (như KIT bên dưới)
-    // Chạy qua static server (không mở file://).
-    // ================================================================
-    const gltfLoader = new GLTFLoader();
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-    gltfLoader.setDRACOLoader(dracoLoader);
-
-    // Absolute path (leading /) → browser gọi /asset/building/...
-    // Nếu thiếu / đầu → sẽ thành /temple/asset/... (404)
-    // Đặt file .glb vào: frontend/asset/building/
-    const ASSET_BASE = '/asset/building/';
-
-    const glb = (name) => ASSET_BASE + encodeURIComponent(name);
-
-    const KIT = {
-      low_building: glb('Low Building-4RoPd9BkSx.glb'),
-      large_building: glb('Large Building-h7Jaq7bqMq.glb'),
-      large_building_v2: glb('Large Building-sxXonOmtct.glb'),
-      small_building: glb('Small Building.glb'),
-      low_wide: glb('Low Wide-DKgknsHjmr.glb'),
-      hospital: glb('Sign Hospital.glb'),
-      skyscraper: glb('Skyscraper-jIRx0AhYOR.glb'),
-    };
-
-    // Map loại logic → key trong KIT
-    const TYPE_TO_KIT = {
-      residential: 'small_building',
-      office: 'large_building',
-      office2: 'large_building_v2',
-      tower: 'skyscraper',
-      shop: 'low_wide',
-      low: 'low_building',
-      hospital: 'hospital',
-    };
-
-    const buildingTemplates = {};
-    let glbReady = false;
-
-    function normalizeModel(model, targetHeight = 1.0) {
-      model.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          if (child.material) {
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach((m) => {
-              if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
-              m.needsUpdate = true;
-            });
-          }
-        }
-      });
-      // Đưa chân model về y=0 và scale theo chiều cao mục tiêu
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      if (size.y > 0.001) {
-        const s = targetHeight / size.y;
-        model.scale.multiplyScalar(s);
-      }
-      box.setFromObject(model);
-      model.position.y -= box.min.y;
-      return model;
-    }
-
-    async function loadBuilding(url, targetHeight = 1.0) {
-      const gltf = await gltfLoader.loadAsync(url);
-      const model = gltf.scene;
-      normalizeModel(model, targetHeight);
-      return model;
-    }
-
-    async function getBuildingTemplate(logicalType, targetHeight = 1.0) {
-      const key = TYPE_TO_KIT[logicalType] || logicalType;
-      const cacheKey = key + '_' + targetHeight;
-      if (!buildingTemplates[cacheKey]) {
-        if (!KIT[key]) throw new Error('KIT missing key: ' + key);
-        buildingTemplates[cacheKey] = await loadBuilding(KIT[key], targetHeight);
-      }
-      return buildingTemplates[cacheKey].clone(true);
-    }
-
-    // Build section nav dots
-    sections.forEach((sec, i) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.setAttribute('aria-label', `Section ${i + 1}`);
-      btn.addEventListener('click', () => {
-        sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-      sectionNav.appendChild(btn);
-    });
-    const navButtons = sectionNav.querySelectorAll('button');
-
-    // ================================================================
-    // DATA
-    // ================================================================
-    const demandData = Array.from({ length: 80 }, (_, i) => {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 0.5 + Math.random() * 4.5;
-      return {
-        id: i,
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        w: 0.3 + Math.random() * 0.7,
-      };
-    });
-
-    const candidateData = Array.from({ length: 30 }, (_, i) => {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 0.8 + Math.random() * 4.2;
-      return {
-        id: i,
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        cost: 0.5 + Math.random() * 0.5,
-      };
-    });
-
-    const numPareto = 20;
-    const paretoData = [];
-    for (let i = 0; i < numPareto; i++) {
-      const coverage = 0.6 + (i / (numPareto - 1)) * 0.35;
-      const cost = 0.6 - (i / (numPareto - 1)) * 0.4;
-      const numFac = Math.floor(5 + cost * 20);
-      const shuffled = [...Array(candidateData.length).keys()];
-      for (let j = shuffled.length - 1; j > 0; j--) {
-        const k = Math.floor(Math.random() * (j + 1));
-        [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]];
-      }
-      const indices = shuffled.slice(0, Math.min(numFac, shuffled.length));
-      paretoData.push({ coverage, cost, dominated: false, facilityAssignment: indices });
-    }
-    for (let i = 0; i < paretoData.length; i++) {
-      let dominated = false;
-      for (let j = 0; j < paretoData.length; j++) {
-        if (i === j) continue;
-        const a = paretoData[i];
-        const b = paretoData[j];
-        if (b.coverage >= a.coverage && b.cost <= a.cost && (b.coverage > a.coverage || b.cost < a.cost)) {
-          dominated = true;
-          break;
-        }
-      }
-      paretoData[i].dominated = dominated;
-    }
-    const selectedSolutionIndex = paretoData.findIndex(p => !p.dominated);
-
-    document.getElementById('demandCount').textContent = demandData.length;
-    document.getElementById('candidateCount').textContent = candidateData.length;
-
-    // ================================================================
-    // THREE.JS SETUP
-    // ================================================================
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x070b14);
-    scene.fog = new THREE.FogExp2(0x070b14, 0.045);
-
-    const camera = new THREE.PerspectiveCamera(38, sceneCol.clientWidth / sceneCol.clientHeight, 0.1, 40);
-    camera.position.set(0, 6.8, 9.5);
-    camera.lookAt(0, 0.2, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    renderer.setSize(sceneCol.clientWidth, sceneCol.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    sceneCol.prepend(renderer.domElement);
-
-    // ================================================================
-    // LIGHTING — richer & softer
-    // ================================================================
-    const ambient = new THREE.AmbientLight(0x2a3a55, 0.55);
-    scene.add(ambient);
-
-    const mainLight = new THREE.DirectionalLight(0xfff0e0, 1.85);
-    mainLight.position.set(7, 14, 5);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.set(1024, 1024);
-    const d = 9;
-    mainLight.shadow.camera.left = -d;
-    mainLight.shadow.camera.right = d;
-    mainLight.shadow.camera.top = d;
-    mainLight.shadow.camera.bottom = -d;
-    mainLight.shadow.camera.near = 1;
-    mainLight.shadow.camera.far = 25;
-    mainLight.shadow.bias = -0.0008;
-    scene.add(mainLight);
-
-    const fillLight = new THREE.DirectionalLight(0x6a9fff, 0.55);
-    fillLight.position.set(-5, 3, 7);
-    scene.add(fillLight);
-
-    const rimLight = new THREE.DirectionalLight(0x88c8ff, 0.35);
-    rimLight.position.set(0, 2, -8);
-    scene.add(rimLight);
-
-    // ================================================================
-    // GROUND (no grid — roads instead)
-    // ================================================================
-    const groundGeo = new THREE.CircleGeometry(6.8, 64);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x0a121c,
-      roughness: 0.95,
-      metalness: 0.03,
-      side: THREE.DoubleSide,
-    });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.04;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    const ringGeo = new THREE.RingGeometry(6.2, 6.8, 64);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x152030,
-      transparent: true,
-      opacity: 0.7,
-      side: THREE.DoubleSide,
-    });
-    const outerRing = new THREE.Mesh(ringGeo, ringMat);
-    outerRing.rotation.x = -Math.PI / 2;
-    outerRing.position.y = 0.005;
-    scene.add(outerRing);
-
-    // ================================================================
-    // SUN
-    // ================================================================
-    const sunGroup = new THREE.Group();
-    const sunCore = new THREE.Mesh(
-      new THREE.SphereGeometry(0.35, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xfff0c0 })
-    );
-    sunGroup.add(sunCore);
-    const sunGlow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.55, 16, 16),
-      new THREE.MeshBasicMaterial({
-        color: 0xffcc66,
-        transparent: true,
-        opacity: 0.35,
-        depthWrite: false,
-      })
-    );
-    sunGroup.add(sunGlow);
-    const sunHalo = new THREE.Mesh(
-      new THREE.SphereGeometry(0.9, 16, 16),
-      new THREE.MeshBasicMaterial({
-        color: 0xffaa44,
-        transparent: true,
-        opacity: 0.12,
-        depthWrite: false,
-      })
-    );
-    sunGroup.add(sunHalo);
-    sunGroup.position.set(5.5, 4.2, -4.5);
-    scene.add(sunGroup);
-
-    // ================================================================
-    // ROAD NETWORK
-    // ================================================================
-    const roadsGroup = new THREE.Group();
-    const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2230,
-      roughness: 0.9,
-      metalness: 0.05,
-    });
-    const lineMat = new THREE.MeshBasicMaterial({
-      color: 0xc8b060,
-      transparent: true,
-      opacity: 0.55,
-    });
-    const sidewalkMat = new THREE.MeshStandardMaterial({
-      color: 0x2a3548,
-      roughness: 0.85,
-      metalness: 0.05,
-    });
-
-    function addRoadSegment(x1, z1, x2, z2, width = 0.38) {
-      const dx = x2 - x1;
-      const dz = z2 - z1;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      const angle = Math.atan2(dz, dx);
-      const midX = (x1 + x2) / 2;
-      const midZ = (z1 + z2) / 2;
-
-      // Sidewalks
-      const sw = new THREE.Mesh(
-        new THREE.BoxGeometry(len + 0.08, 0.015, width + 0.22),
-        sidewalkMat
-      );
-      sw.position.set(midX, 0.008, midZ);
-      sw.rotation.y = -angle;
-      sw.receiveShadow = true;
-      roadsGroup.add(sw);
-
-      // Road surface
-      const road = new THREE.Mesh(
-        new THREE.BoxGeometry(len, 0.02, width),
-        roadMat
-      );
-      road.position.set(midX, 0.018, midZ);
-      road.rotation.y = -angle;
-      road.receiveShadow = true;
-      roadsGroup.add(road);
-
-      // Center dashed line
-      const dashCount = Math.max(2, Math.floor(len / 0.35));
-      for (let i = 0; i < dashCount; i++) {
-        if (i % 2 === 0) continue;
-        const t = (i + 0.5) / dashCount;
-        const lx = x1 + dx * t;
-        const lz = z1 + dz * t;
-        const dash = new THREE.Mesh(
-          new THREE.BoxGeometry(0.14, 0.008, 0.025),
-          lineMat
-        );
-        dash.position.set(lx, 0.03, lz);
-        dash.rotation.y = -angle;
-        roadsGroup.add(dash);
-      }
-    }
-
-    // Main cross roads + ring-ish streets
-    addRoadSegment(-5.2, 0, 5.2, 0, 0.42);
-    addRoadSegment(0, -5.2, 0, 5.2, 0.42);
-    addRoadSegment(-4.0, -3.2, 4.0, -3.2, 0.32);
-    addRoadSegment(-4.0, 3.2, 4.0, 3.2, 0.32);
-    addRoadSegment(-3.2, -4.0, -3.2, 4.0, 0.32);
-    addRoadSegment(3.2, -4.0, 3.2, 4.0, 0.32);
-    // Diagonals / secondary
-    addRoadSegment(-4.5, -1.6, 4.5, 1.6, 0.28);
-    addRoadSegment(-4.5, 1.6, 4.5, -1.6, 0.28);
-    addRoadSegment(-2.0, -4.8, 2.0, 4.8, 0.26);
-    addRoadSegment(2.0, -4.8, -2.0, 4.8, 0.26);
-    scene.add(roadsGroup);
-
-    // ================================================================
-    // BUS STOPS
-    // ================================================================
-    const busStopsGroup = new THREE.Group();
-    function createBusStop(x, z, rotY = 0) {
-      const g = new THREE.Group();
-      // Pole
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.025, 0.45, 6),
-        new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.6, roughness: 0.3 })
-      );
-      pole.position.y = 0.22;
-      pole.castShadow = true;
-      g.add(pole);
-      // Sign
-      const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.12, 0.02),
-        new THREE.MeshStandardMaterial({
-          color: 0x2a6aaa,
-          emissive: 0x1a4a88,
-          emissiveIntensity: 0.4,
-          metalness: 0.2,
-          roughness: 0.4,
-        })
-      );
-      sign.position.set(0, 0.42, 0.02);
-      g.add(sign);
-      // Shelter roof
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(0.35, 0.02, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0x445566, metalness: 0.3, roughness: 0.5 })
-      );
-      roof.position.set(0.08, 0.38, 0);
-      g.add(roof);
-      // Bench
-      const bench = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, 0.03, 0.1),
-        new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.7 })
-      );
-      bench.position.set(0.08, 0.12, 0);
-      g.add(bench);
-      g.position.set(x, 0, z);
-      g.rotation.y = rotY;
-      return g;
-    }
-    const busStopPositions = [
-      [1.8, 0.35, 0], [-2.1, -0.35, Math.PI], [0.35, 2.0, Math.PI / 2],
-      [-0.35, -2.2, -Math.PI / 2], [3.5, 3.5, 0.4], [-3.4, 3.0, -0.5],
-    ];
-    busStopPositions.forEach(([x, z, r]) => busStopsGroup.add(createBusStop(x, z, r)));
-    scene.add(busStopsGroup);
-
-    // ================================================================
-    // BUILDINGS — GLB kit with city-block layout (no road overlap)
-    // ================================================================
-    const buildings = new THREE.Group();
-    scene.add(buildings);
-
-    // Road half-widths must match addRoadSegment widths (+ sidewalk margin)
-    const ROAD_CLEARANCE = 0.55; // khoảng trống mép đường (lề + buffer)
-    const ROAD_LINES = [
-      // axis-aligned roads: type, fixedAxisValue, halfWidth
-      { axis: 'z', value: 0, half: 0.42 / 2 + ROAD_CLEARANCE },
-      { axis: 'x', value: 0, half: 0.42 / 2 + ROAD_CLEARANCE },
-      { axis: 'z', value: -3.2, half: 0.32 / 2 + ROAD_CLEARANCE },
-      { axis: 'z', value: 3.2, half: 0.32 / 2 + ROAD_CLEARANCE },
-      { axis: 'x', value: -3.2, half: 0.32 / 2 + ROAD_CLEARANCE },
-      { axis: 'x', value: 3.2, half: 0.32 / 2 + ROAD_CLEARANCE },
-    ];
-
-    function nearRoad(x, z, footprintR = 0.25) {
-      for (const r of ROAD_LINES) {
-        if (r.axis === 'z' && Math.abs(z - r.value) < r.half + footprintR) return true;
-        if (r.axis === 'x' && Math.abs(x - r.value) < r.half + footprintR) return true;
-      }
-      // Diagonal roads (approximate band)
-      const d1 = Math.abs(z - x * (1.6 / 4.5)) / Math.SQRT2;
-      const d2 = Math.abs(z + x * (1.6 / 4.5)) / Math.SQRT2;
-      if (d1 < 0.35 + footprintR || d2 < 0.35 + footprintR) return true;
-      // Center plaza
-      if (Math.hypot(x, z) < 1.25 + footprintR) return true;
-      // Outer rim
-      if (Math.hypot(x, z) > 5.4) return true;
-      return false;
-    }
-
-    // City blocks: slots between the main grid roads
-    function buildBlockSlots() {
-      // Vertical corridors between x roads: (-inf,-3.2), (-3.2,0), (0,3.2), (3.2,inf)
-      // Horizontal between z roads similarly
-      const xBands = [
-        [-5.0, -3.2],
-        [-3.2, 0],
-        [0, 3.2],
-        [3.2, 5.0],
-      ];
-      const zBands = [
-        [-5.0, -3.2],
-        [-3.2, 0],
-        [0, 3.2],
-        [3.2, 5.0],
-      ];
-      const margin = ROAD_CLEARANCE + 0.15;
-      const slots = [];
-      for (const [x0, x1] of xBands) {
-        for (const [z0, z1] of zBands) {
-          const minX = x0 + margin;
-          const maxX = x1 - margin;
-          const minZ = z0 + margin;
-          const maxZ = z1 - margin;
-          if (maxX - minX < 0.5 || maxZ - minZ < 0.5) continue;
-          // Skip center block (plaza)
-          if (x0 >= -3.2 && x1 <= 3.2 && z0 >= -3.2 && z1 <= 3.2 && Math.abs(x0 + x1) < 0.1 && Math.abs(z0 + z1) < 0.1) {
-            // the four central-ish blocks still OK except pure center
-          }
-          // Grid of candidate points inside block
-          const cols = Math.max(1, Math.floor((maxX - minX) / 0.85));
-          const rows = Math.max(1, Math.floor((maxZ - minZ) / 0.85));
-          for (let i = 0; i < cols; i++) {
-            for (let j = 0; j < rows; j++) {
-              const u = (i + 0.5) / cols;
-              const v = (j + 0.5) / rows;
-              const x = minX + u * (maxX - minX) + (Math.random() - 0.5) * 0.12;
-              const z = minZ + v * (maxZ - minZ) + (Math.random() - 0.5) * 0.12;
-              if (Math.hypot(x, z) < 1.35) continue;
-              slots.push({ x, z });
-            }
-          }
-        }
-      }
-      // Shuffle
-      for (let i = slots.length - 1; i > 0; i--) {
-        const k = Math.floor(Math.random() * (i + 1));
-        [slots[i], slots[k]] = [slots[k], slots[i]];
-      }
-      return slots;
-    }
-
-    function createFallbackBuilding(x, z, h, color) {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, h, 0.28),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1 })
-      );
-      body.position.y = h / 2;
-      body.castShadow = true;
-      body.receiveShadow = true;
-      g.add(body);
-      g.position.set(x, 0, z);
-      return g;
-    }
-
-    // Footprint radius estimate per type (world units after normalize)
-    const FOOTPRINT = {
-      residential: 0.28,
-      office: 0.32,
-      office2: 0.34,
-      tower: 0.26,
-      shop: 0.30,
-      low: 0.32,
-    };
-
-    // Smaller heights so GLB không chiếm cả mặt đường
-    function pickBuildingType() {
-      const roll = Math.random();
-      if (roll < 0.32) return { logicalType: 'residential', targetH: 0.35 + Math.random() * 0.35 };
-      if (roll < 0.55) return { logicalType: Math.random() > 0.5 ? 'office' : 'office2', targetH: 0.55 + Math.random() * 0.55 };
-      if (roll < 0.68) return { logicalType: 'tower', targetH: 0.9 + Math.random() * 0.7 };
-      if (roll < 0.85) return { logicalType: 'shop', targetH: 0.28 + Math.random() * 0.22 };
-      return { logicalType: 'low', targetH: 0.3 + Math.random() * 0.25 };
-    }
-
-    async function placeGlbBuildings() {
-      const slots = buildBlockSlots();
-      const placements = [];
-      const occupied = []; // {x,z,r}
-
-      const MAX_BUILDINGS = 100;
-      for (const slot of slots) {
-        if (placements.length >= MAX_BUILDINGS) break;
-        const { logicalType, targetH } = pickBuildingType();
-        const r = FOOTPRINT[logicalType] || 0.3;
-        if (nearRoad(slot.x, slot.z, r)) continue;
-
-        // Min distance to other buildings (no overlap)
-        let ok = true;
-        for (const o of occupied) {
-          const dist = Math.hypot(slot.x - o.x, slot.z - o.z);
-          if (dist < r + o.r + 0.18) {
-            ok = false;
-            break;
-          }
-        }
-        if (!ok) continue;
-
-        occupied.push({ x: slot.x, z: slot.z, r });
-        placements.push({ x: slot.x, z: slot.z, logicalType, targetH, footprint: r });
-      }
-
-      const unique = [...new Set(placements.map((p) => p.logicalType))];
-      try {
-        await Promise.all(
-          unique.map((t) =>
-            getBuildingTemplate(t, 1.0).catch((err) => {
-              console.warn('GLB load failed for', t, err);
-              return null;
-            })
-          )
-        );
-        glbReady = true;
-      } catch (e) {
-        console.warn('GLB kit unavailable, using fallback boxes', e);
-        glbReady = false;
-      }
-
-      for (const p of placements) {
-        try {
-          if (!glbReady) throw new Error('no glb');
-          const b = await getBuildingTemplate(p.logicalType, p.targetH);
-          // Clamp horizontal footprint if model still too wide
-          const box0 = new THREE.Box3().setFromObject(b);
-          const size0 = box0.getSize(new THREE.Vector3());
-          const maxFoot = p.footprint * 2.2;
-          const footXY = Math.max(size0.x, size0.z);
-          if (footXY > maxFoot && footXY > 0.001) {
-            b.scale.multiplyScalar(maxFoot / footXY);
-          }
-          b.position.set(p.x, 0, p.z);
-          const box = new THREE.Box3().setFromObject(b);
-          b.position.y -= box.min.y;
-          // Align to block, only slight yaw (not random 0.5 which looks chaotic)
-          b.rotation.y = (Math.random() - 0.5) * 0.12;
-          buildings.add(b);
-        } catch {
-          const colors = [0xd8c0a8, 0xa8c0d8, 0xb8d0b0, 0xe0c8a0, 0xc0b0d0];
-          buildings.add(
-            createFallbackBuilding(
-              p.x,
-              p.z,
-              p.targetH,
-              colors[Math.floor(Math.random() * colors.length)]
-            )
-          );
-        }
-      }
-      console.log('✅ Buildings placed:', buildings.children.length, 'slots=', slots.length, 'glbReady=', glbReady);
-    }
-
-    placeGlbBuildings();
-
-    // ================================================================
-    // CARS (move with scroll progress)
-    // ================================================================
-    const carsGroup = new THREE.Group();
-    const carColors = [0xe05040, 0x4080d0, 0xf0e0a0, 0x50a060, 0xc0c0c8, 0x303040, 0xe08030];
-
-    function createCar(color) {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.07, 0.12),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.4 })
-      );
-      body.position.y = 0.06;
-      body.castShadow = true;
-      g.add(body);
-      const cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.06, 0.11),
-        new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.3, metalness: 0.5 })
-      );
-      cabin.position.set(-0.02, 0.12, 0);
-      g.add(cabin);
-      // Headlights
-      const hl = new THREE.Mesh(
-        new THREE.BoxGeometry(0.02, 0.02, 0.08),
-        new THREE.MeshBasicMaterial({ color: 0xffffcc })
-      );
-      hl.position.set(0.11, 0.06, 0);
-      g.add(hl);
-      return g;
-    }
-
-    // Road paths: [x1,z1,x2,z2] — cars lerp along these
-    const carPaths = [
-      { a: [-5.0, 0.12], b: [5.0, 0.12], speed: 1.0 },
-      { a: [5.0, -0.12], b: [-5.0, -0.12], speed: 0.9 },
-      { a: [0.12, -5.0], b: [0.12, 5.0], speed: 0.85 },
-      { a: [-0.12, 5.0], b: [-0.12, -5.0], speed: 1.1 },
-      { a: [-3.9, -3.35], b: [3.9, -3.35], speed: 0.7 },
-      { a: [3.9, 3.35], b: [-3.9, 3.35], speed: 0.75 },
-      { a: [-3.35, 3.9], b: [-3.35, -3.9], speed: 0.8 },
-      { a: [3.35, -3.9], b: [3.35, 3.9], speed: 0.65 },
-    ];
-
-    const cars = [];
-    for (let i = 0; i < 14; i++) {
-      const path = carPaths[i % carPaths.length];
-      const car = createCar(carColors[i % carColors.length]);
-      const offset = Math.random();
-      cars.push({ mesh: car, path, offset, lane: i });
-      carsGroup.add(car);
-    }
-    scene.add(carsGroup);
-
-    // ================================================================
-    // PEDESTRIANS
-    // ================================================================
-    const pedestriansGroup = new THREE.Group();
-    function createPedestrian(hue) {
-      const g = new THREE.Group();
-      const bodyColor = new THREE.Color().setHSL(hue, 0.4, 0.45);
-      const torso = new THREE.Mesh(
-        new THREE.BoxGeometry(0.04, 0.07, 0.03),
-        new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.7 })
-      );
-      torso.position.y = 0.1;
-      g.add(torso);
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.022, 6, 6),
-        new THREE.MeshStandardMaterial({ color: 0xe0c0a0, roughness: 0.6 })
-      );
-      head.position.y = 0.155;
-      g.add(head);
-      const legs = new THREE.Mesh(
-        new THREE.BoxGeometry(0.035, 0.05, 0.025),
-        new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.8 })
-      );
-      legs.position.y = 0.04;
-      g.add(legs);
-      return g;
-    }
-
-    const pedPaths = [
-      { a: [-4.5, 0.45], b: [4.5, 0.45] },
-      { a: [4.5, -0.45], b: [-4.5, -0.45] },
-      { a: [0.45, -4.5], b: [0.45, 4.5] },
-      { a: [-0.45, 4.5], b: [-0.45, -4.5] },
-      { a: [-3.0, 3.55], b: [3.0, 3.55] },
-      { a: [3.0, -3.55], b: [-3.0, -3.55] },
-    ];
-    const pedestrians = [];
-    for (let i = 0; i < 18; i++) {
-      const path = pedPaths[i % pedPaths.length];
-      const ped = createPedestrian(Math.random());
-      pedestrians.push({ mesh: ped, path, offset: Math.random(), speed: 0.4 + Math.random() * 0.4 });
-      pedestriansGroup.add(ped);
-    }
-    scene.add(pedestriansGroup);
-
-    // ================================================================
-    // AIRPLANE
-    // ================================================================
-    const planeGroup = new THREE.Group();
-    const planeBody = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.03, 0.55, 8),
-      new THREE.MeshStandardMaterial({ color: 0xe8eef5, metalness: 0.5, roughness: 0.3 })
-    );
-    planeBody.rotation.z = Math.PI / 2;
-    planeGroup.add(planeBody);
-    const wing = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.015, 0.55),
-      new THREE.MeshStandardMaterial({ color: 0xc8d0dc, metalness: 0.4, roughness: 0.35 })
-    );
-    planeGroup.add(wing);
-    const tail = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, 0.12, 0.02),
-      new THREE.MeshStandardMaterial({ color: 0x5bb8f5, metalness: 0.3, roughness: 0.4 })
-    );
-    tail.position.set(-0.22, 0.06, 0);
-    planeGroup.add(tail);
-    // Nav lights
-    const navL = new THREE.Mesh(
-      new THREE.SphereGeometry(0.02, 6, 6),
-      new THREE.MeshBasicMaterial({ color: 0xff2020 })
-    );
-    navL.position.set(0, 0, 0.28);
-    planeGroup.add(navL);
-    const navR = new THREE.Mesh(
-      new THREE.SphereGeometry(0.02, 6, 6),
-      new THREE.MeshBasicMaterial({ color: 0x20ff40 })
-    );
-    navR.position.set(0, 0, -0.28);
-    planeGroup.add(navR);
-    planeGroup.position.set(-8, 3.5, -3);
-    planeGroup.visible = false;
-    scene.add(planeGroup);
-
-    // ================================================================
-    // CELEBRATION: service building + fireworks at chosen candidate
-    // ================================================================
-    const celebrateGroup = new THREE.Group();
-    celebrateGroup.visible = false;
-    scene.add(celebrateGroup);
-
-    // Pick one facility from the selected Pareto solution
-    const solForCelebrate = paretoData[selectedSolutionIndex] || paretoData[0];
-    const celebrateSiteIdx = solForCelebrate.facilityAssignment[
-      Math.floor(Math.random() * solForCelebrate.facilityAssignment.length)
-    ];
-    const celebratePos = candidateData[celebrateSiteIdx] || candidateData[0];
-
-    // ---- Special service / business building ----
-    function createServiceBuilding() {
-      const g = new THREE.Group();
-      // Main body — warm clinic/shop look
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.55, 0.55, 0.45),
-        new THREE.MeshStandardMaterial({
-          color: 0xf0e8d8,
-          roughness: 0.45,
-          metalness: 0.1,
-          emissive: 0xffd080,
-          emissiveIntensity: 0.15,
-        })
-      );
-      body.position.y = 0.28;
-      body.castShadow = true;
-      body.receiveShadow = true;
-      g.add(body);
-
-      // Accent band
-      const band = new THREE.Mesh(
-        new THREE.BoxGeometry(0.58, 0.06, 0.48),
-        new THREE.MeshStandardMaterial({
-          color: 0x5bb8f5,
-          emissive: 0x3a90d0,
-          emissiveIntensity: 0.5,
-          metalness: 0.3,
-          roughness: 0.35,
-        })
-      );
-      band.position.y = 0.48;
-      g.add(band);
-
-      // Roof
-      const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(0.62, 0.05, 0.52),
-        new THREE.MeshStandardMaterial({ color: 0x3a4a5a, metalness: 0.35, roughness: 0.4 })
-      );
-      roof.position.y = 0.58;
-      roof.castShadow = true;
-      g.add(roof);
-
-      // Glowing cross / service sign
-      const crossMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
-      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.04), crossMat);
-      crossV.position.set(0, 0.72, 0);
-      g.add(crossV);
-      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.04), crossMat);
-      crossH.position.set(0, 0.72, 0);
-      g.add(crossH);
-
-      // Entrance light
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 0.22, 0.02),
-        new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.85 })
-      );
-      door.position.set(0, 0.16, 0.24);
-      g.add(door);
-
-      // Ground platform
-      const pad = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.4, 0.42, 0.04, 16),
-        new THREE.MeshStandardMaterial({
-          color: 0x2a3a50,
-          emissive: 0x1a3050,
-          emissiveIntensity: 0.3,
-          roughness: 0.6,
-        })
-      );
-      pad.position.y = 0.02;
-      g.add(pad);
-
-      // Soft ground glow ring
-      const glowRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.35, 0.55, 32),
-        new THREE.MeshBasicMaterial({
-          color: 0x5bb8f5,
-          transparent: true,
-          opacity: 0.35,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        })
-      );
-      glowRing.rotation.x = -Math.PI / 2;
-      glowRing.position.y = 0.03;
-      g.add(glowRing);
-      g.userData.glowRing = glowRing;
-
-      return g;
-    }
-
-    // Ưu tiên hospital.glb từ kit; fallback procedural service building
-    let serviceBuilding = createServiceBuilding();
-    serviceBuilding.position.set(celebratePos.x, 0, celebratePos.y);
-    serviceBuilding.scale.set(0.01, 0.01, 0.01);
-    celebrateGroup.add(serviceBuilding);
-
-    (async () => {
-      try {
-        const hospital = await getBuildingTemplate('hospital', 0.85);
-        hospital.position.set(celebratePos.x, 0, celebratePos.y);
-        const box = new THREE.Box3().setFromObject(hospital);
-        hospital.position.y -= box.min.y;
-        hospital.scale.set(0.01, 0.01, 0.01);
-        // giữ glow ring từ procedural dưới chân
-        const glow = serviceBuilding.userData.glowRing;
-        if (glow) {
-          hospital.userData.glowRing = glow;
-          hospital.add(glow.clone());
-        }
-        celebrateGroup.remove(serviceBuilding);
-        serviceBuilding = hospital;
-        celebrateGroup.add(serviceBuilding);
-        console.log('✅ Celebration hospital GLB loaded');
-      } catch (e) {
-        console.warn('Hospital GLB not found, keep procedural service building', e);
-      }
-    })();
-
-    // ---- Fireworks particles ----
-    const FW_COUNT = 120;
-    const fwPositions = new Float32Array(FW_COUNT * 3);
-    const fwVelocities = [];
-    const fwColors = new Float32Array(FW_COUNT * 3);
-    const fwLife = new Float32Array(FW_COUNT);
-    const fwPalette = [
-      [1.0, 0.35, 0.2], [1.0, 0.7, 0.15], [0.3, 0.85, 1.0],
-      [0.4, 1.0, 0.5], [1.0, 0.4, 0.8], [0.9, 0.9, 1.0],
-    ];
-
-    for (let i = 0; i < FW_COUNT; i++) {
-      fwPositions[i * 3] = 0;
-      fwPositions[i * 3 + 1] = 0;
-      fwPositions[i * 3 + 2] = 0;
-      fwVelocities.push(new THREE.Vector3());
-      fwLife[i] = 0;
-      const c = fwPalette[i % fwPalette.length];
-      fwColors[i * 3] = c[0];
-      fwColors[i * 3 + 1] = c[1];
-      fwColors[i * 3 + 2] = c[2];
-    }
-
-    const fwGeo = new THREE.BufferGeometry();
-    fwGeo.setAttribute('position', new THREE.BufferAttribute(fwPositions, 3));
-    fwGeo.setAttribute('color', new THREE.BufferAttribute(fwColors, 3));
-    const fwMat = new THREE.PointsMaterial({
-      size: 0.12,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    });
-    const fireworks = new THREE.Points(fwGeo, fwMat);
-    fireworks.visible = false;
-    celebrateGroup.add(fireworks);
-
-    // Burst state
-    let celebrateTriggered = false;
-    let celebrateAnimT = 0;
-    let fwBurstActive = false;
-    let fwBurstTime = 0;
-
-    function triggerFireworksBurst() {
-      fwBurstActive = true;
-      fwBurstTime = 0;
-      fireworks.visible = true;
-      const origin = new THREE.Vector3(celebratePos.x, 0.9, celebratePos.y);
-      for (let i = 0; i < FW_COUNT; i++) {
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.random() * Math.PI * 0.55;
-        const speed = 1.2 + Math.random() * 2.2;
-        fwVelocities[i].set(
-          Math.sin(phi) * Math.cos(theta) * speed,
-          Math.cos(phi) * speed * 1.15,
-          Math.sin(phi) * Math.sin(theta) * speed
-        );
-        fwPositions[i * 3] = origin.x;
-        fwPositions[i * 3 + 1] = origin.y;
-        fwPositions[i * 3 + 2] = origin.z;
-        fwLife[i] = 0.7 + Math.random() * 0.5;
-        const c = fwPalette[Math.floor(Math.random() * fwPalette.length)];
-        fwColors[i * 3] = c[0];
-        fwColors[i * 3 + 1] = c[1];
-        fwColors[i * 3 + 2] = c[2];
-      }
-      fwGeo.attributes.position.needsUpdate = true;
-      fwGeo.attributes.color.needsUpdate = true;
-    }
-
-    function updateFireworks(dt) {
-      if (!fwBurstActive) return;
-      fwBurstTime += dt;
-      const pos = fwGeo.attributes.position.array;
-      let alive = 0;
-      for (let i = 0; i < FW_COUNT; i++) {
-        if (fwLife[i] <= 0) continue;
-        fwLife[i] -= dt * 0.55;
-        fwVelocities[i].y -= 2.8 * dt; // gravity
-        fwVelocities[i].multiplyScalar(0.985); // drag
-        pos[i * 3] += fwVelocities[i].x * dt;
-        pos[i * 3 + 1] += fwVelocities[i].y * dt;
-        pos[i * 3 + 2] += fwVelocities[i].z * dt;
-        if (fwLife[i] > 0) alive++;
-      }
-      fwGeo.attributes.position.needsUpdate = true;
-      fwMat.opacity = Math.max(0, 1 - fwBurstTime * 0.45);
-      fwMat.size = 0.12 + Math.sin(fwBurstTime * 8) * 0.03;
-      if (alive === 0 || fwBurstTime > 3.5) {
-        fwBurstActive = false;
-        fireworks.visible = false;
-      }
-    }
-
-    // ================================================================
-    // DEMAND POINTS — glow spheres + soft ground rings
-    // ================================================================
-    const demandGroup = new THREE.Group();
-    const demandMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.25,
-      metalness: 0.2,
-      emissive: 0xff4400,
-      emissiveIntensity: 0.45,
-      vertexColors: true,
-    });
-    const demandGeo = new THREE.SphereGeometry(0.06, 12, 12);
-    const demandMesh = new THREE.InstancedMesh(demandGeo, demandMat, demandData.length);
-    demandMesh.castShadow = true;
-    demandMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Soft halo rings under each demand point
-    const demandHaloMat = new THREE.MeshBasicMaterial({
-      color: 0xff6622,
-      transparent: true,
-      opacity: 0.22,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const demandHaloGeo = new THREE.RingGeometry(0.08, 0.16, 24);
-    const demandHaloMesh = new THREE.InstancedMesh(demandHaloGeo, demandHaloMat, demandData.length);
-    demandHaloMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    const dummy = new THREE.Object3D();
-    const haloDummy = new THREE.Object3D();
-    const demandColors = new Float32Array(demandData.length * 3);
-    for (let i = 0; i < demandData.length; i++) {
-      const p = demandData[i];
-      const s = 0.9 + p.w * 0.55;
-      dummy.position.set(p.x, 0.1, p.y);
-      dummy.scale.set(s, s, s);
-      dummy.updateMatrix();
-      demandMesh.setMatrixAt(i, dummy.matrix);
-
-      haloDummy.position.set(p.x, 0.02, p.y);
-      haloDummy.rotation.x = -Math.PI / 2;
-      const hs = 0.9 + p.w * 0.7;
-      haloDummy.scale.set(hs, hs, hs);
-      haloDummy.updateMatrix();
-      demandHaloMesh.setMatrixAt(i, haloDummy.matrix);
-
-      const intensity = 0.4 + p.w * 0.6;
-      demandColors[i * 3] = 1.0 * intensity;
-      demandColors[i * 3 + 1] = 0.42 * intensity;
-      demandColors[i * 3 + 2] = 0.1 * intensity;
-    }
-    demandMesh.instanceMatrix.needsUpdate = true;
-    demandHaloMesh.instanceMatrix.needsUpdate = true;
-    demandMesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(demandColors, 3));
-    demandGroup.add(demandMesh);
-    demandGroup.add(demandHaloMesh);
-    scene.add(demandGroup);
-    demandGroup.visible = false;
-
-    // ================================================================
-    // CANDIDATE SITES — pillar + glowing top beacon
-    // ================================================================
-    const candidateGroup = new THREE.Group();
-    const siteMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.28,
-      metalness: 0.3,
-      emissive: 0x2a6aaa,
-      emissiveIntensity: 0.35,
-      vertexColors: true,
-    });
-    const siteGeo = new THREE.CylinderGeometry(0.055, 0.08, 0.32, 8);
-    const siteMesh = new THREE.InstancedMesh(siteGeo, siteMat, candidateData.length);
-    siteMesh.castShadow = true;
-    siteMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Glowing beacon tip on top of each candidate
-    const beaconMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.2,
-      metalness: 0.4,
-      emissive: 0x5bb8f5,
-      emissiveIntensity: 0.85,
-      vertexColors: true,
-    });
-    const beaconGeo = new THREE.SphereGeometry(0.045, 10, 10);
-    const beaconMesh = new THREE.InstancedMesh(beaconGeo, beaconMat, candidateData.length);
-    beaconMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Ground marker ring
-    const siteRingMat = new THREE.MeshBasicMaterial({
-      color: 0x5bb8f5,
-      transparent: true,
-      opacity: 0.3,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const siteRingGeo = new THREE.RingGeometry(0.1, 0.16, 28);
-    const siteRingMesh = new THREE.InstancedMesh(siteRingGeo, siteRingMat, candidateData.length);
-    siteRingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    const siteDummy = new THREE.Object3D();
-    const beaconDummy = new THREE.Object3D();
-    const ringDummy = new THREE.Object3D();
-    const siteColorsInit = new Float32Array(candidateData.length * 3);
-    for (let i = 0; i < candidateData.length; i++) {
-      const p = candidateData[i];
-      siteDummy.position.set(p.x, 0.16, p.y);
-      siteDummy.scale.set(1, 1, 1);
-      siteDummy.updateMatrix();
-      siteMesh.setMatrixAt(i, siteDummy.matrix);
-
-      beaconDummy.position.set(p.x, 0.36, p.y);
-      beaconDummy.scale.set(1, 1, 1);
-      beaconDummy.updateMatrix();
-      beaconMesh.setMatrixAt(i, beaconDummy.matrix);
-
-      ringDummy.position.set(p.x, 0.025, p.y);
-      ringDummy.rotation.x = -Math.PI / 2;
-      ringDummy.scale.set(1, 1, 1);
-      ringDummy.updateMatrix();
-      siteRingMesh.setMatrixAt(i, ringDummy.matrix);
-
-      siteColorsInit[i * 3] = 0.35;
-      siteColorsInit[i * 3 + 1] = 0.7;
-      siteColorsInit[i * 3 + 2] = 0.98;
-    }
-    siteMesh.instanceMatrix.needsUpdate = true;
-    beaconMesh.instanceMatrix.needsUpdate = true;
-    siteRingMesh.instanceMatrix.needsUpdate = true;
-    siteMesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(siteColorsInit, 3));
-    beaconMesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(siteColorsInit.slice(), 3));
-    candidateGroup.add(siteMesh);
-    candidateGroup.add(beaconMesh);
-    candidateGroup.add(siteRingMesh);
-    scene.add(candidateGroup);
-    candidateGroup.visible = false;
-
-    // ================================================================
-    // COVERAGE CIRCLES (InstancedMesh)
-    // ================================================================
-    const circleGroup = new THREE.Group();
-    const circleMat = new THREE.MeshBasicMaterial({
-      color: 0x5bb8f5,
-      transparent: true,
-      opacity: 0.18,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    // Use a ring that we scale; inner/outer ratio keeps a thin ring look when scaled
-    const circleGeo = new THREE.RingGeometry(0.92, 1.0, 48);
-    const circleInstanced = new THREE.InstancedMesh(circleGeo, circleMat, candidateData.length);
-    circleInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    const circleDummy = new THREE.Object3D();
-    for (let i = 0; i < candidateData.length; i++) {
-      const p = candidateData[i];
-      circleDummy.position.set(p.x, 0.03, p.y);
-      circleDummy.rotation.x = -Math.PI / 2;
-      circleDummy.scale.set(0.01, 0.01, 0.01);
-      circleDummy.updateMatrix();
-      circleInstanced.setMatrixAt(i, circleDummy.matrix);
-    }
-    circleInstanced.instanceMatrix.needsUpdate = true;
-    circleGroup.add(circleInstanced);
-    scene.add(circleGroup);
-    circleGroup.visible = false;
-
-    // Soft fill disks under coverage (semi-transparent)
-    const diskMat = new THREE.MeshBasicMaterial({
-      color: 0x5bb8f5,
-      transparent: true,
-      opacity: 0.06,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const diskGeo = new THREE.CircleGeometry(1, 32);
-    const diskInstanced = new THREE.InstancedMesh(diskGeo, diskMat, candidateData.length);
-    diskInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    for (let i = 0; i < candidateData.length; i++) {
-      const p = candidateData[i];
-      circleDummy.position.set(p.x, 0.025, p.y);
-      circleDummy.rotation.x = -Math.PI / 2;
-      circleDummy.scale.set(0.01, 0.01, 0.01);
-      circleDummy.updateMatrix();
-      diskInstanced.setMatrixAt(i, circleDummy.matrix);
-    }
-    diskInstanced.instanceMatrix.needsUpdate = true;
-    circleGroup.add(diskInstanced);
-
-    // Pareto 3D scatter đã bỏ — không hiệu quả về mặt thị giác.
-    // Dữ liệu paretoData vẫn dùng cho counters & facility assignment.
-
-    // ================================================================
-    // SCROLLTRIGGER
-    // ================================================================
-    const progress = { value: 0 };
-    const sectionLabels = [
-      'Tổng quan', 'Bối cảnh', 'Demand', 'Ứng viên',
-      'Bán kính R', 'Max Coverage', 'Min Cost', 'Pareto', 'Nghiệm chọn'
-    ];
-
-    const cameraTimeline = gsap.timeline({
-      scrollTrigger: {
-        trigger: textCol,
-        start: 'top top',
-        end: 'bottom bottom',
-        // Scrub chậm hơn một chút để scene & text đồng bộ mượt
-        scrub: 1.4,
-        invalidateOnRefresh: true,
-        onUpdate: (self) => {
-          progress.value = self.progress;
-          updateScene(progress.value);
-          progressBar.style.width = (self.progress * 100) + '%';
-        },
-      },
-    });
-    cameraTimeline.to(progress, { value: 1, duration: 1, ease: 'none' });
-
-    sections.forEach((sec, i) => {
-      ScrollTrigger.create({
-        trigger: sec,
-        // Hiện sớm hơn và giữ lâu hơn trước khi fade out
-        start: 'top 90%',
-        end: 'bottom 25%',
-        toggleActions: 'play none none reverse',
-        onEnter: () => {
-          sec.classList.add('active');
-          navButtons.forEach((b, j) => b.classList.toggle('active', j === i));
-        },
-        onEnterBack: () => {
-          sec.classList.add('active');
-          navButtons.forEach((b, j) => b.classList.toggle('active', j === i));
-        },
-        onLeave: () => sec.classList.remove('active'),
-        onLeaveBack: () => sec.classList.remove('active'),
-      });
-    });
-
-    // ================================================================
-    // SCENE UPDATE
-    // ================================================================
-    const matrix = new THREE.Matrix4();
-    const posVec = new THREE.Vector3();
-    const scaleVec = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-
-    function updateScene(p) {
-      const totalSections = 9;
-      const seg = 1 / totalSections;
-      const section = Math.min(Math.floor(p / seg), totalSections - 1);
-      const localT = (p - section * seg) / seg;
-
-      demandGroup.visible = section >= 2;
-      candidateGroup.visible = section >= 3;
-      // Coverage circles only during radius / objectives
-      circleGroup.visible = section >= 4 && section <= 6;
-      // Giữ map + facilities trên section Pareto & nghiệm chọn (không còn scatter 3D)
-
-      // HUD
-      if (section >= 2) {
-        sceneHud.classList.add('visible');
-        hudSection.textContent = sectionLabels[section] || 'Scene';
-      } else {
-        sceneHud.classList.remove('visible');
-      }
-
-      // Camera path — góc cao, nhìn xuống bản đồ
-      const keyframes = [
-        { pos: [0, 5.5, 9.0], target: [0, 0.15, 0] },
-        { pos: [0, 6.2, 8.0], target: [0, 0.2, 0] },
-        { pos: [0.4, 6.8, 6.5], target: [0, 0.1, 0] },
-        { pos: [-0.3, 6.0, 6.2], target: [0, 0.1, 0] },
-        { pos: [0, 6.5, 7.0], target: [0, 0.1, 0] },
-        { pos: [0.25, 5.8, 7.2], target: [0, 0.1, 0] },
-        { pos: [-0.15, 5.5, 7.5], target: [0, 0.1, 0] },
-        { pos: [0, 5.8, 7.0], target: [0, 0.15, 0] },
-        { pos: [0, 5.2, 7.0], target: [0, 0.15, 0] },
-      ];
-      const idx = Math.min(Math.floor(p * (keyframes.length - 1)), keyframes.length - 2);
-      const t = (p * (keyframes.length - 1)) % 1;
-      const a = keyframes[idx];
-      const b = keyframes[idx + 1] || a;
-      const easeT = t * t * (3 - 2 * t); // smoothstep
-      camera.position.set(
-        a.pos[0] + (b.pos[0] - a.pos[0]) * easeT,
-        a.pos[1] + (b.pos[1] - a.pos[1]) * easeT,
-        a.pos[2] + (b.pos[2] - a.pos[2]) * easeT
-      );
-      camera.lookAt(
-        a.target[0] + (b.target[0] - a.target[0]) * easeT,
-        a.target[1] + (b.target[1] - a.target[1]) * easeT,
-        a.target[2] + (b.target[2] - a.target[2]) * easeT
-      );
-
-      // Coverage radius expansion (section 4)
-      if (section === 4) {
-        const radius = 0.15 + localT * 1.85;
-        hudRadius.textContent = radius.toFixed(2);
-
-        for (let i = 0; i < candidateData.length; i++) {
-          const pnt = candidateData[i];
-          // Ring
-          circleDummy.position.set(pnt.x, 0.03, pnt.y);
-          circleDummy.rotation.x = -Math.PI / 2;
-          circleDummy.scale.set(radius, radius, radius);
-          circleDummy.updateMatrix();
-          circleInstanced.setMatrixAt(i, circleDummy.matrix);
-          // Disk
-          circleDummy.position.set(pnt.x, 0.025, pnt.y);
-          circleDummy.scale.set(radius, radius, radius);
-          circleDummy.updateMatrix();
-          diskInstanced.setMatrixAt(i, circleDummy.matrix);
-        }
-        circleInstanced.instanceMatrix.needsUpdate = true;
-        diskInstanced.instanceMatrix.needsUpdate = true;
-        circleMat.opacity = 0.12 + localT * 0.14;
-        diskMat.opacity = 0.04 + localT * 0.05;
-
-        // Color demand by coverage
-        const colors = demandMesh.geometry.attributes.instanceColor;
-        if (colors) {
-          for (let i = 0; i < demandData.length; i++) {
-            const dp = demandData[i];
-            let minDist = Infinity;
-            for (const site of candidateData) {
-              const dx = dp.x - site.x;
-              const dy = dp.y - site.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist < minDist) minDist = dist;
-            }
-            const covered = minDist < radius;
-            if (covered) {
-              colors.setXYZ(i, 0.25, 0.85, 0.45);
-            } else {
-              const intensity = 0.35 + dp.w * 0.65;
-              colors.setXYZ(i, 1.0 * intensity, 0.45 * intensity, 0.12 * intensity);
-            }
-          }
-          colors.needsUpdate = true;
-        }
-      } else {
-        hudRadius.textContent = '—';
-      }
-
-      // Objective 1 counter
-      if (section === 5) {
-        const covered = Math.floor(localT * demandData.length);
-        document.getElementById('coveredCounter').textContent = covered;
-      }
-
-      // Objective 2 — fade facilities + beacons
-      if (section === 6) {
-        const finalSolution = paretoData[selectedSolutionIndex];
-        const finalFacilityCount = finalSolution ? finalSolution.facilityAssignment.length : 8;
-        const startFacilities = candidateData.length;
-        const currentFacilities = Math.round(startFacilities - (startFacilities - finalFacilityCount) * localT);
-        document.getElementById('facilityCounter').textContent = currentFacilities;
-
-        const siteColors = siteMesh.geometry.attributes.instanceColor;
-        const beaconColors = beaconMesh.geometry.attributes.instanceColor;
-        if (siteColors) {
-          for (let i = 0; i < candidateData.length; i++) {
-            const active = i < currentFacilities;
-            if (active) {
-              siteColors.setXYZ(i, 0.35, 0.7, 0.98);
-              if (beaconColors) beaconColors.setXYZ(i, 0.4, 0.75, 1.0);
-            } else {
-              siteColors.setXYZ(i, 0.1, 0.1, 0.12);
-              if (beaconColors) beaconColors.setXYZ(i, 0.08, 0.08, 0.1);
-            }
-          }
-          siteColors.needsUpdate = true;
-          if (beaconColors) beaconColors.needsUpdate = true;
-        }
-      }
-
-      // Final solution highlight — selected facilities glow warm
-      if (section === 8 || section === 7) {
-        const sol = paretoData[selectedSolutionIndex];
-        if (sol) {
-          if (section === 8) {
-            document.getElementById('finalCoverage').textContent = Math.round(sol.coverage * 100);
-            document.getElementById('finalFacilities').textContent = sol.facilityAssignment.length;
-          }
-          const siteColors = siteMesh.geometry.attributes.instanceColor;
-          const beaconColors = beaconMesh.geometry.attributes.instanceColor;
-          if (siteColors) {
-            const selectedSet = new Set(sol.facilityAssignment);
-            for (let i = 0; i < candidateData.length; i++) {
-              if (selectedSet.has(i)) {
-                siteColors.setXYZ(i, 1.0, 0.62, 0.22);
-                if (beaconColors) beaconColors.setXYZ(i, 1.0, 0.7, 0.25);
-              } else {
-                siteColors.setXYZ(i, 0.1, 0.1, 0.12);
-                if (beaconColors) beaconColors.setXYZ(i, 0.08, 0.08, 0.1);
-              }
-            }
-            siteColors.needsUpdate = true;
-            if (beaconColors) beaconColors.needsUpdate = true;
-          }
-        }
-      }
-
-      // ---- Celebration: grow service building + fireworks ----
-      if (section === 8) {
-        celebrateGroup.visible = true;
-        // Grow building over first half of section
-        const growT = Math.min(1, localT * 1.8);
-        const easeGrow = 1 - Math.pow(1 - growT, 3);
-        serviceBuilding.scale.setScalar(0.01 + easeGrow * 0.99);
-        serviceBuilding.rotation.y = easeGrow * Math.PI * 0.5;
-        if (serviceBuilding.userData.glowRing) {
-          serviceBuilding.userData.glowRing.material.opacity = 0.2 + easeGrow * 0.35;
-        }
-        // Trigger fireworks once building mostly appears
-        if (!celebrateTriggered && localT > 0.45) {
-          celebrateTriggered = true;
-          triggerFireworksBurst();
-          // Second burst a moment later via timer feel (using animT)
-          celebrateAnimT = 0;
-        }
-        if (celebrateTriggered) {
-          celebrateAnimT += 0.016;
-          // Extra bursts for richer finale
-          if (celebrateAnimT > 0.9 && celebrateAnimT < 1.0 && !fwBurstActive) {
-            triggerFireworksBurst();
-          }
-          if (celebrateAnimT > 1.8 && celebrateAnimT < 1.9 && !fwBurstActive) {
-            triggerFireworksBurst();
-          }
-        }
-      } else if (section < 8) {
-        // Reset if user scrolls back up
-        celebrateTriggered = false;
-        celebrateAnimT = 0;
-        celebrateGroup.visible = false;
-        serviceBuilding.scale.set(0.01, 0.01, 0.01);
-        fireworks.visible = false;
-        fwBurstActive = false;
-      }
-
-      // ---- City life driven by scroll ----
-      // Cars along road paths
-      cars.forEach((c) => {
-        const tCar = ((p * c.path.speed * 2.2) + c.offset) % 1;
-        const x = c.path.a[0] + (c.path.b[0] - c.path.a[0]) * tCar;
-        const z = c.path.a[1] + (c.path.b[1] - c.path.a[1]) * tCar;
-        c.mesh.position.set(x, 0, z);
-        const angle = Math.atan2(c.path.b[1] - c.path.a[1], c.path.b[0] - c.path.a[0]);
-        c.mesh.rotation.y = -angle;
-      });
-
-      // Pedestrians (slower)
-      pedestrians.forEach((ped) => {
-        const tPed = ((p * ped.speed * 1.5) + ped.offset) % 1;
-        const x = ped.path.a[0] + (ped.path.b[0] - ped.path.a[0]) * tPed;
-        const z = ped.path.a[1] + (ped.path.b[1] - ped.path.a[1]) * tPed;
-        ped.mesh.position.set(x, 0, z);
-        const angle = Math.atan2(ped.path.b[1] - ped.path.a[1], ped.path.b[0] - ped.path.a[0]);
-        ped.mesh.rotation.y = -angle;
-      });
-
-      // Airplane fly-by across the whole scroll
-      planeGroup.visible = true;
-      const planeT = (p * 1.15) % 1;
-      planeGroup.position.set(
-        -7 + planeT * 14,
-        3.2 + Math.sin(planeT * Math.PI) * 0.8,
-        -4 + planeT * 3.5
-      );
-      planeGroup.rotation.y = -0.35;
-      planeGroup.rotation.z = Math.sin(planeT * Math.PI * 2) * 0.08;
-
-      // Sun gentle drift
-      sunGroup.position.set(
-        5.2 + Math.sin(p * Math.PI) * 0.6,
-        4.0 + p * 0.5,
-        -4.2 - p * 0.4
-      );
-    }
-
-    // ================================================================
-    // RESIZE
-    // ================================================================
-    function onResize() {
-      const w = sceneCol.clientWidth;
-      const h = sceneCol.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-      ScrollTrigger.refresh();
-    }
-    window.addEventListener('resize', onResize);
-
-    // ================================================================
-    // RENDER LOOP + subtle idle animation
-    // ================================================================
-    let time = 0;
-    gsap.ticker.add((t, delta) => {
-      time += delta * 0.001;
-      // Soft pulse on demand emissive
-      if (demandGroup.visible) {
-        demandMat.emissiveIntensity = 0.35 + Math.sin(time * 2.2) * 0.12;
-        demandHaloMat.opacity = 0.16 + Math.sin(time * 2.2) * 0.08;
-      }
-      // Beacon breathe
-      if (candidateGroup.visible) {
-        beaconMat.emissiveIntensity = 0.7 + Math.sin(time * 1.8) * 0.2;
-      }
-      // Sun glow pulse
-      if (sunGlow) {
-        sunGlow.scale.setScalar(1 + Math.sin(time * 0.8) * 0.06);
-        sunHalo.scale.setScalar(1 + Math.sin(time * 0.5) * 0.08);
-      }
-      // Fireworks physics
-      updateFireworks(delta * 0.001);
-      // Continuous car/ped motion (works even when not scrolling)
-      const idle = 0.0004 * delta;
-      const pNow = progress.value;
-      cars.forEach((c) => {
-        c.offset = (c.offset + idle * c.path.speed) % 1;
-        const tCar = ((pNow * c.path.speed * 2.2) + c.offset) % 1;
-        const x = c.path.a[0] + (c.path.b[0] - c.path.a[0]) * tCar;
-        const z = c.path.a[1] + (c.path.b[1] - c.path.a[1]) * tCar;
-        c.mesh.position.set(x, 0, z);
-        c.mesh.rotation.y = -Math.atan2(c.path.b[1] - c.path.a[1], c.path.b[0] - c.path.a[0]);
-      });
-      pedestrians.forEach((ped) => {
-        ped.offset = (ped.offset + idle * ped.speed * 0.55) % 1;
-        const tPed = ((pNow * ped.speed * 1.5) + ped.offset) % 1;
-        const x = ped.path.a[0] + (ped.path.b[0] - ped.path.a[0]) * tPed;
-        const z = ped.path.a[1] + (ped.path.b[1] - ped.path.a[1]) * tPed;
-        ped.mesh.position.set(x, 0, z);
-        ped.mesh.rotation.y = -Math.atan2(ped.path.b[1] - ped.path.a[1], ped.path.b[0] - ped.path.a[0]);
-      });
-      renderer.render(scene, camera);
-    });
-    gsap.ticker.lagSmoothing(0);
-
-    // ================================================================
-    // REDUCED MOTION
-    // ================================================================
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      cameraTimeline.scrollTrigger?.disable();
-      camera.position.set(0, 5.5, 9);
-      camera.lookAt(0, 0.15, 0);
-      sections.forEach(sec => sec.classList.add('active'));
-      progressBar.style.width = '100%';
-      demandGroup.visible = true;
-      candidateGroup.visible = true;
-      circleGroup.visible = true;
-      sceneHud.classList.add('visible');
-    }
-
-    // ================================================================
-    // PERFORMANCE: Visibility + IntersectionObserver
-    // ================================================================
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) gsap.ticker.pause();
-      else gsap.ticker.resume();
-    });
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) gsap.ticker.resume();
-        else gsap.ticker.pause();
-      });
-    }, { threshold: 0.08 });
-    observer.observe(sceneCol);
-
-    console.log('✅ MCLP Scrollytelling improved — UI + 3D');
-  </script>
 </body>
 </html>

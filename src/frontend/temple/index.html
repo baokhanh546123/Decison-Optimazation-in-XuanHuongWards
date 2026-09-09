@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCLP Runner · Tối ưu vị trí kinh doanh</title>
+  <!-- Google Fonts: Inter + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/index.css">
+</head>
+<body>
+  <!-- ===== SCROLL PROGRESS BAR ===== -->
+  <div class="scroll-progress-bar" id="scrollProgressBar"></div>
+
+  <!-- ===== TOPBAR ===== -->
+  <header class="topbar" id="topbar">
+    <a href="#" class="topbar__brand">
+      <span class="topbar__dot"></span>
+      MCLP Runner
+    </a>
+    <nav class="topbar__nav">
+      <a href="#hero">Trang chủ</a>
+      <a href="#challenges">Bài toán</a>
+      <a href="#scrolly">Mô hình 3D</a>
+      <a href="#team">Đội ngũ</a>
+      <a href="#contact">Liên hệ</a>
+    </nav>
+    <a href="#scrolly" class="topbar__cta">Khám phá mô hình</a>
+    <button class="topbar__menu-btn" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </header>
+
+  <!-- ===== HERO (marketing) ===== -->
+  <section class="hero" id="hero">
+    <div class="container">
+      <div class="hero__inner">
+        <p class="hero__eyebrow"><b>Decision Optimization</b> · MCLP Framework</p>
+        <h1>Tối ưu hóa vị trí kinh doanh bằng <span class="accent">Bài toán Bao phủ Cực đại (MCLP)</span></h1>
+        <p class="hero__sub">Đưa ra quyết định mở địa điểm chính xác, cắt giảm chi phí đầu tư và tối đa hóa tiếp cận khách hàng dựa trên dữ liệu.</p>
+        <p class="hero__body">Trong chiến lược mở rộng mạng lưới, chọn đúng vị trí quyết định 80% sự thành công. Hệ thống Decision Optimization ứng dụng mô hình MCLP (Maximal Covering Location Problem) giúp các doanh nghiệp xác định chính xác số lượng và vị trí đặt cửa hàng, kho bãi hoặc trung tâm dịch vụ nhằm bao phủ thị trường tối đa với nguồn lực tối ưu.</p>
+        <div class="hero__actions">
+          <a href="#scrolly" class="btn-primary">Xem mô hình 3D</a>
+          <a href="#contact" class="btn-ghost">Tư vấn giải pháp</a>
+        </div>
+        <p class="hero__fud">Không ràng buộc · Tư vấn khám phá 15 phút · <span>Dữ liệu giữ bí mật</span></p>
+        <div class="hero__proof">
+          <div class="proof-item">
+            <span class="proof-item__val">80%</span>
+            <span class="proof-item__label">Thành công phụ thuộc vị trí</span>
+          </div>
+          <div class="proof-item">
+            <span class="proof-item__val">3</span>
+            <span class="proof-item__label">Mục tiêu tối ưu đồng thời</span>
+          </div>
+          <div class="proof-item">
+            <span class="proof-item__val">Pareto</span>
+            <span class="proof-item__label">Trade-off Cost ↔ Coverage</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CHALLENGES (marketing) ===== -->
+  <section class="marketing-section" id="challenges">
+    <div class="container">
+      <p class="section__eyebrow">Bài toán thực tế</p>
+      <h2 class="section__title">Thách thức kinh doanh trong việc lựa chọn địa điểm</h2>
+      <p class="section__intro">Trước khi mở rộng mạng lưới kinh doanh tại các khu vực đô thị trọng điểm, doanh nghiệp thường gặp phải những vướng mắc chiến lược:</p>
+      <div class="challenge-grid">
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3>Xung đột giữa Chi phí &amp; Bán kính bao phủ</h3>
+          <p>Mở quá nhiều điểm để phủ khách hàng sẽ làm bùng nổ chi phí vận hành (CapEx/OpEx). Mở quá ít điểm lại tạo cơ hội cho đối thủ chiếm lĩnh thị phần.</p>
+        </div>
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M9 12h6"/></svg>
+          </div>
+          <h3>Lãng phí khoảng chồng lấp (Overlap)</h3>
+          <p>Đặt các chi nhánh quá gần nhau dẫn đến việc tự tranh giành khách hàng của chính mình (Cannibalization).</p>
+        </div>
+        <div class="challenge-card">
+          <div class="challenge-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V10l7-7 7 7v11"/><path d="M9 21v-6h6v6"/></svg>
+          </div>
+          <h3>Mật độ dân số &amp; Giao thông không đồng đều</h3>
+          <p>Dữ liệu dân cư và hạ tầng thay đổi theo từng quận/phường, đòi hỏi tính toán khoa học thay vì ra quyết định dựa trên cảm tính.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 3D SCROLLYTELLING SECTION (from index.html) ===== -->
+  <section class="scrolly-section" id="scrolly">
+    <div class="scrolly-inner">
+
+      <!-- CỘT TEXT (trái) -->
+      <div class="text-col" id="textCol">
+
+        <!-- Section 0 - Hero -->
+        <div class="section-text" data-section="0">
+          <span class="badge">🧭 MCLP</span>
+          <h2>Maximal Covering Location Problem</h2>
+          <p>
+            Tối ưu hóa vị trí đặt cơ sở dịch vụ để phủ tối đa nhu cầu với chi phí
+            nhỏ nhất. Đây là bài toán <span class="highlight">multi‑objective</span>
+            trong quy hoạch đô thị.
+          </p>
+          <p style="margin-top:0.9rem; font-size:0.88rem; color:#6a8098;">
+            Cuộn xuống để khám phá các bước giải quyết.
+          </p>
+        </div>
+
+        <!-- Section 1 - City Context -->
+        <div class="section-text" data-section="1">
+          <span class="badge">🏙️ Bối cảnh</span>
+          <h2>Thành phố thông minh</h2>
+          <p>
+            Chúng ta cần đặt các trạm dịch vụ (cứu hỏa, y tế, wifi) trong một khu
+            đô thị giả định. Mỗi điểm dân cư có nhu cầu khác nhau, và mỗi trạm chỉ
+            phủ được trong bán kính <span class="highlight">R</span>.
+          </p>
+        </div>
+
+        <!-- Section 2 - Demand Points -->
+        <div class="section-text" data-section="2">
+          <span class="badge">📍 Nhu cầu</span>
+          <h2>Điểm dân cư (Demand Points)</h2>
+          <p>
+            Mỗi chấm màu thể hiện một khu vực có nhu cầu <span class="highlight">w<sub>i</sub></span>.
+            Màu càng đậm → nhu cầu càng cao.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Số điểm</div>
+              <div class="value accent" id="demandCount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3 - Candidate Sites -->
+        <div class="section-text" data-section="3">
+          <span class="badge">📌 Ứng viên</span>
+          <h2>Các vị trí khả dĩ</h2>
+          <p>
+            <span class="highlight">Candidate sites</span> là nơi có thể đặt trạm
+            (biến quyết định <span class="highlight">x<sub>j</sub> ∈ {0,1}</span>).
+            Mỗi vị trí sẽ được đánh giá qua hai mục tiêu.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Ứng viên</div>
+              <div class="value accent" id="candidateCount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4 - Coverage Radius -->
+        <div class="section-text" data-section="4">
+          <span class="badge">⭕ Bán kính phủ</span>
+          <h2>Coverage Radius <span style="font-weight:400;">R</span></h2>
+          <p>
+            Khi cuộn, mỗi ứng viên sẽ "nở" ra vòng tròn bán kính R. Những điểm
+            nằm trong vòng tròn sẽ được <span class="highlight">phủ</span> và
+            chuyển sang màu xanh.
+          </p>
+          <div class="formula">
+            covered<sub>i</sub> = 1 &nbsp;⇔&nbsp; ∃ j: x<sub>j</sub> = 1 và dist(i,j) ≤ R
+          </div>
+        </div>
+
+        <!-- Section 5 - Objective 1 -->
+        <div class="section-text" data-section="5">
+          <span class="badge">🎯 Mục tiêu 1</span>
+          <h2>Tối đa phủ sóng</h2>
+          <p>
+            <span class="highlight">Maximize</span> tổng nhu cầu được phủ:
+          </p>
+          <div class="formula">
+            max Σ w<sub>i</sub> · covered<sub>i</sub>
+          </div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Điểm được phủ</div>
+              <div class="value success" id="coveredCounter">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 6 - Objective 2 -->
+        <div class="section-text" data-section="6">
+          <span class="badge">💰 Mục tiêu 2</span>
+          <h2>Giảm chi phí</h2>
+          <p>
+            <span class="highlight">Minimize</span> số lượng cơ sở được chọn (hoặc
+            chi phí mở):
+          </p>
+          <div class="formula">
+            min Σ c<sub>j</sub> · x<sub>j</sub>
+          </div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Cơ sở hoạt động</div>
+              <div class="value warm" id="facilityCounter">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7 - Pareto Front -->
+        <div class="section-text" data-section="7">
+          <span class="badge">📈 Pareto Front</span>
+          <h2>Đường cong trade‑off</h2>
+          <p>
+            Các nghiệm tối ưu Pareto (không bị trội) tạo thành mặt biên. Mỗi chấm
+            là một giải pháp khả thi. Chấm <span class="highlight">sáng</span> là
+            non‑dominated.
+          </p>
+        </div>
+
+        <!-- Section 8 - Optimal Solution -->
+        <div class="section-text" data-section="8">
+          <span class="badge">✅ Nghiệm chọn</span>
+          <h2>Giải pháp cuối cùng</h2>
+          <p>
+            Dựa trên ưu tiên của nhà quy hoạch, ta chọn một nghiệm trên Pareto
+            front. Trên bản đồ, các facility được chọn sẽ phát sáng.
+          </p>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="label">Coverage</div>
+              <div class="value success"><span id="finalCoverage">0</span>%</div>
+            </div>
+            <div class="stat-pill">
+              <div class="label">Số trạm</div>
+              <div class="value warm" id="finalFacilities">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer inside scrolly -->
+        <div class="footer-section">
+          <h3>📊 Dữ liệu từ solver</h3>
+          <p style="max-width:42ch; margin:0 auto; color:var(--text-muted);">
+            Bài toán giải bằng <a href="#">NSGA‑II</a>
+            với 200 thế hệ. Tham khảo nguồn dữ liệu và paper bên dưới.
+          </p>
+          <button class="cta-btn" type="button">📄 Xem báo cáo</button>
+          <div style="font-size:0.72rem; color:#4a5a6e; margin-top:0.5rem;">
+            © 2026 — Scrollytelling MCLP · Three.js + GSAP
+          </div>
+        </div>
+
+      </div><!-- /text-col -->
+
+      <!-- CỘT 3D (phải) -->
+      <div class="scene-col" id="sceneCol">
+        <div class="scene-hud" id="sceneHud">
+          <div class="hud-chip"><span class="hud-dot"></span> <strong id="hudSection">Scene</strong></div>
+          <div class="hud-chip">R ≈ <strong id="hudRadius">—</strong></div>
+        </div>
+      </div>
+
+    </div><!-- /scrolly-inner -->
+  </section>
+
+  <!-- ===== TEAM (marketing) ===== -->
+  <section class="marketing-section" id="team">
+    <div class="container">
+      <p class="section__eyebrow">Đội ngũ</p>
+      <h2 class="section__title">Chuyên gia &amp; Thành viên Dự án</h2>
+      <p class="section__intro">Nhóm chuyên gia tối ưu hóa, khoa học dữ liệu và kỹ thuật phần mềm đứng sau mô hình MCLP Runner.</p>
+      <div class="team-grid">
+        <div class="team-card">
+          <div class="team-card__avatar">TV1</div>
+          <h3>[Tên Thành Viên 1]</h3>
+          <p class="team-card__role">Project Manager / Data Scientist</p>
+          <p>Chịu trách nhiệm: Xây dựng bài toán toán học, tối ưu thuật toán MCLP.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV2</div>
+          <h3>[Tên Thành Viên 2]</h3>
+          <p class="team-card__role">OR/Optimization Specialist</p>
+          <p>Chịu trách nhiệm: Phát triển mô hình Multi-objective, xử lý ràng buộc tuyến tính / phi tuyến.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV3</div>
+          <h3>[Tên Thành Viên 3]</h3>
+          <p class="team-card__role">GIS &amp; Data Engineer</p>
+          <p>Chịu trách nhiệm: Thu thập, làm sạch và xử lý dữ liệu không gian tại Khu vực A.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">TV4</div>
+          <h3>[Tên Thành Viên 4]</h3>
+          <p class="team-card__role">Full-stack / UI-UX Developer</p>
+          <p>Chịu trách nhiệm: Thiết kế giao diện Dashboard tương tác và tích hợp mô hình lên hệ thống Web.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FINAL CTA (marketing) ===== -->
+  <section class="final-cta" id="contact">
+    <div class="container">
+      <div class="final-cta__inner">
+        <h2>Sẵn sàng tối ưu mạng lưới địa điểm của bạn?</h2>
+        <p>Khám phá mô hình MCLP Runner — xem các kịch bản Pareto, so sánh chi phí và tỷ lệ bao phủ, đưa ra quyết định dựa trên dữ liệu thay vì cảm tính.</p>
+        <div class="final-cta__actions">
+          <a href="#scrolly" class="btn-primary">Xem mô hình 3D</a>
+          <a href="mailto:contact@mclp-runner.local" class="btn-ghost">Tư vấn giải pháp</a>
+        </div>
+        <p class="final-cta__fud">Không ràng buộc · Tư vấn khám phá 15 phút · <span>Dữ liệu giữ bí mật</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="container">
+      <p>© 2026 MCLP Runner · Decision Optimization. All rights reserved.</p>
+      <p>MCLP Decision Optimization Framework for Business Location Problem.</p>
+    </div>
+  </footer>
+
+  <!-- ===== Section nav dots (scrolly) ===== -->
+  <nav class="section-nav" id="sectionNav" aria-label="Điều hướng section">
+    <!-- filled by JS -->
+  </nav>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module" src="/js/index.js"></script>
+
+</body>
+</html>

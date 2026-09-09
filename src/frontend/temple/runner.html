@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCLP Runner — Đà Lạt · Grok</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<style>
+/* ===== RESET & VARIABLES ===== */
+*{ box-sizing:border-box; margin:0; padding:0; }
+:root{
+  --bg:#0d1512;
+  --bg-panel:#121c17;
+  --bg-panel-raised:#16221b;
+  --border:#263a30;
+  --border-soft:#1b2b23;
+  --text:#e7eae2;
+  --text-muted:#8ea092;
+  --text-faint:#5c6d62;
+  --gold:#d4a24e;
+  --gold-dim:#6b552c;
+  --green:#5b9279;
+  --rust:#b5602e;
+  --mist:#6e8a93;
+  --radius-sm:4px;
+  --radius-md:8px;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --display:'Space Grotesk',sans-serif;
+}
+html{ scroll-behavior:smooth; }
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--mono); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+::selection{ background:var(--gold-dim); color:var(--gold); }
+a{ color:inherit; }
+button{ font-family:var(--mono); }
+h1,h2,h3{ font-family:var(--display); font-weight:600; margin:0; letter-spacing:-0.01em; }
+p{ margin:0; }
+
+/* ===== CUSTOM CURSOR ===== */
+*{ cursor:none !important; }
+
+#custom-cursor{
+  position:fixed;
+  width:8px; height:8px;
+  background:#d4a24e;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:9999;
+  transform:translate(-50%,-50%);
+  mix-blend-mode:difference;
+  transition:opacity 0.2s, width 0.2s, height 0.2s;
+}
+#cursor-follower{
+  position:fixed;
+  width:30px; height:30px;
+  border:1px solid #d4a24e;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:9998;
+  transform:translate(-50%,-50%);
+  transition:width 0.28s cubic-bezier(0.34,1.56,0.64,1),
+             height 0.28s cubic-bezier(0.34,1.56,0.64,1),
+             background 0.28s, opacity 0.28s, border-color 0.28s;
+  opacity:0.5;
+  display:flex; align-items:center; justify-content:center;
+}
+.cursor-active{
+  width:58px !important;
+  height:58px !important;
+  background:rgba(212,162,78,0.12) !important;
+  border-color:rgba(212,162,78,0.7) !important;
+  opacity:1 !important;
+}
+.cursor-drag{
+  width:44px !important;
+  height:44px !important;
+  background:rgba(212,162,78,0.18) !important;
+  border-color:#d4a24e !important;
+  opacity:1 !important;
+}
+.cursor-hidden{ opacity:0 !important; }
+
+/* ===== THREE.JS BG ===== */
+#three-bg{
+  position:fixed; inset:0; width:100vw; height:100vh;
+  z-index:0; pointer-events:none;
+}
+.container{
+  max-width:1180px; margin:0 auto; padding:0 28px;
+  position:relative; z-index:2;
+}
+
+/* ===== TOPBAR ===== */
+.topbar{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 28px;
+  background:rgba(13,21,18,0.85);
+  backdrop-filter:blur(14px) saturate(1.2);
+  border-bottom:1px solid var(--border-soft);
+  transition:box-shadow 0.3s ease;
+}
+.topbar.scrolled{ box-shadow:0 8px 32px rgba(0,0,0,0.4); }
+.topbar__brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--display); font-weight:600; font-size:15px;
+}
+.topbar__dot{
+  width:8px; height:8px; border-radius:50%;
+  background:var(--gold);
+  box-shadow:0 0 0 3px rgba(212,162,78,0.18);
+  animation:pulseDot 2.6s ease-in-out infinite;
+}
+@keyframes pulseDot{
+  0%,100%{ box-shadow:0 0 0 3px rgba(212,162,78,0.18); transform:scale(1); }
+  50%{ box-shadow:0 0 0 7px rgba(212,162,78,0.06); transform:scale(1.15); }
+}
+.topbar__coords{ font-size:12.5px; color:var(--text-faint); letter-spacing:0.02em; }
+.topbar__coords span{ color:var(--mist); }
+
+/* ===== HERO ===== */
+.hero{
+  position:relative; padding:64px 0 44px;
+  border-bottom:1px solid var(--border-soft); z-index:2;
+}
+.hero__inner{ max-width:680px; position:relative; z-index:2; }
+.hero__eyebrow{ font-size:12.5px; color:var(--text-muted); margin-bottom:14px; }
+.hero__eyebrow b{ color:var(--gold); font-weight:600; }
+.hero h1{
+  font-size:clamp(26px,3.8vw,38px); line-height:1.12;
+  color:var(--text); margin-bottom:14px;
+}
+.hero h1 em{ font-style:normal; color:var(--green); }
+.hero p.lede{
+  font-size:14px; color:var(--text-muted);
+  max-width:520px; line-height:1.7;
+}
+
+/* ===== WIZARD ===== */
+.wizard{ padding:40px 0 72px; position:relative; z-index:2; }
+.wizard__card{
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  background:rgba(18,28,23,0.88);
+  backdrop-filter:blur(8px);
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.55);
+  transition:box-shadow 0.4s ease, border-color 0.3s ease;
+}
+.wizard__card:hover{
+  border-color:rgba(212,162,78,0.25);
+  box-shadow:0 24px 70px rgba(0,0,0,0.6), 0 0 40px rgba(212,162,78,0.04);
+}
+
+/* ---- stepper ---- */
+.stepper{
+  display:flex; align-items:center;
+  padding:20px 28px;
+  border-bottom:1px solid var(--border-soft);
+}
+.stepper__item{
+  display:flex; align-items:center; gap:10px;
+  flex-shrink:0; transition:opacity 0.2s;
+}
+.stepper__item[data-clickable="true"]{ }
+.stepper__item[data-clickable="true"]:hover .stepper__circle{
+  border-color:var(--mist); color:var(--text);
+  transform:scale(1.1);
+}
+.stepper__circle{
+  width:26px; height:26px; border-radius:50%;
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; color:var(--text-faint);
+  font-family:var(--display);
+  transition:border-color 220ms, color 220ms, background 220ms, transform 280ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 280ms;
+  flex-shrink:0;
+}
+.stepper__label{ font-size:12px; color:var(--text-faint); transition:color 200ms; white-space:nowrap; }
+.stepper__line{
+  flex:1; height:1px; background:var(--border);
+  margin:0 14px; position:relative; overflow:hidden; min-width:20px;
+}
+.stepper__line::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+  transform:scaleX(0); transform-origin:left;
+  transition:transform 380ms cubic-bezier(0.22,1,0.36,1);
+}
+.stepper__line.is-done::after{ transform:scaleX(1); }
+.stepper__item.is-active .stepper__circle{
+  border-color:var(--gold); color:var(--gold);
+  transform:scale(1.12);
+  box-shadow:0 0 0 4px rgba(212,162,78,0.12), 0 0 20px rgba(212,162,78,0.2);
+}
+.stepper__item.is-active .stepper__label{ color:var(--text); }
+.stepper__item.is-done .stepper__circle{
+  border-color:var(--green); background:var(--green); color:#0d1512;
+}
+.stepper__item.is-done .stepper__label{ color:var(--text-muted); }
+@media (max-width:640px){
+  .stepper__label{ display:none; }
+  .stepper{ padding:16px; }
+}
+
+/* ---- body / panes ---- */
+.wizard__body{
+  padding:28px 28px 6px;
+  min-height:380px; position:relative; overflow:hidden;
+}
+.wizard__pane{ display:none; opacity:0; }
+.wizard__pane.is-active{ display:block; opacity:1; }
+.pane__head{ margin-bottom:20px; }
+.pane__head h3{ font-size:17px; color:var(--text); margin-bottom:6px; }
+.pane__head p{ font-size:13px; color:var(--text-muted); max-width:540px; line-height:1.7; }
+@media (max-width:640px){ .wizard__body{ padding:20px 16px 6px; } }
+
+/* ---- footer nav ---- */
+.wizard__nav{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:16px 28px;
+  border-top:1px solid var(--border-soft);
+}
+.wizard__hint{ font-size:11.5px; color:var(--text-faint); text-align:center; flex:1; }
+
+.btn-ghost{
+  background:transparent; border:1px solid var(--border); color:var(--text-muted);
+  padding:10px 16px; border-radius:var(--radius-sm); font-size:12.5px;
+  transition:border-color 160ms, color 160ms, transform 200ms cubic-bezier(0.34,1.56,0.64,1), background 160ms;
+  white-space:nowrap; position:relative; overflow:hidden;
+}
+.btn-ghost:hover:not(:disabled){
+  border-color:var(--mist); color:var(--text);
+  background:rgba(110,138,147,0.08);
+  transform:translateX(-3px);
+}
+.btn-ghost:active:not(:disabled){ transform:scale(0.96) translateX(-1px); }
+.btn-ghost:disabled{ opacity:0.32; transform:none; }
+
+.btn-next{
+  background:var(--gold); color:#1a1206; border:none;
+  padding:10px 18px; border-radius:var(--radius-sm); font-size:12.5px; font-weight:600;
+  transition:background 140ms, transform 200ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 220ms;
+  white-space:nowrap; position:relative; overflow:hidden;
+}
+.btn-next:hover:not(:disabled){
+  background:#e3b568;
+  transform:translateX(3px);
+  box-shadow:0 6px 24px rgba(212,162,78,0.28);
+}
+.btn-next:active:not(:disabled){ transform:scale(0.96) translateX(1px); }
+.btn-next:disabled{ background:var(--border); color:var(--text-faint); transform:none; box-shadow:none; }
+
+.ripple{
+  position:absolute; border-radius:50%;
+  background:rgba(255,255,255,0.25);
+  transform:scale(0); pointer-events:none;
+  animation:rippleAnim 0.55s ease-out;
+}
+@keyframes rippleAnim{ to{ transform:scale(4); opacity:0; } }
+
+/* ---- Toolbar ---- */
+.toolbar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; flex-wrap:wrap; margin-bottom:16px;
+}
+.filter-group{ display:flex; gap:8px; flex-wrap:wrap; }
+.chip{
+  padding:6px 12px; border:1px solid var(--border); border-radius:999px;
+  font-size:12px; color:var(--text-muted); background:transparent;
+  transition:border-color 160ms, color 160ms, background 160ms, transform 200ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms;
+  display:flex; align-items:center; gap:6px;
+}
+.chip:hover{
+  border-color:var(--mist); color:var(--text);
+  transform:translateY(-2px);
+  box-shadow:0 4px 12px rgba(0,0,0,0.2);
+}
+.chip:active{ transform:scale(0.96) translateY(0); }
+.chip.is-active{
+  border-color:var(--gold); color:var(--gold);
+  background:rgba(212,162,78,0.1);
+  box-shadow:0 0 0 1px rgba(212,162,78,0.15);
+}
+.chip__dot{ width:6px; height:6px; border-radius:50%; transition:transform 200ms; }
+.chip:hover .chip__dot{ transform:scale(1.3); }
+.dot-food{ background:var(--gold); }
+.dot-stay{ background:var(--mist); }
+.dot-health{ background:var(--rust); }
+.select-count{ font-size:12.5px; color:var(--text-faint); }
+.select-count b{ color:var(--gold); font-weight:600; }
+
+/* ---- Candidate grid ---- */
+.candidate-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:10px; max-height:380px; overflow-y:auto; padding-right:4px;
+}
+.candidate-grid::-webkit-scrollbar{ width:4px; }
+.candidate-grid::-webkit-scrollbar-track{ background:var(--border-soft); border-radius:4px; }
+.candidate-grid::-webkit-scrollbar-thumb{ background:var(--gold-dim); border-radius:4px; }
+
+.candidate{
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:14px 14px 12px;
+  user-select:none;
+  background:var(--bg-panel-raised);
+  transition:border-color 180ms, background 180ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 220ms;
+  position:relative;
+}
+.candidate:hover{
+  border-color:var(--text-faint);
+  transform:translateY(-4px) scale(1.015);
+  box-shadow:0 12px 28px rgba(0,0,0,0.35);
+}
+.candidate.is-selected{
+  border-color:var(--gold);
+  background:rgba(212,162,78,0.08);
+  box-shadow:0 0 0 1px rgba(212,162,78,0.22), 0 8px 28px rgba(212,162,78,0.08);
+}
+.candidate.is-selected:hover{
+  box-shadow:0 0 0 1px rgba(212,162,78,0.3), 0 14px 32px rgba(212,162,78,0.12);
+}
+.candidate.is-dragging{
+  opacity:0.55; transform:scale(0.96) rotate(1.5deg);
+  box-shadow:0 16px 40px rgba(0,0,0,0.4);
+  z-index:10;
+}
+.candidate__top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.candidate__id{ font-size:11px; color:var(--text-faint); letter-spacing:0.02em; }
+.candidate__check{
+  width:16px; height:16px; border:1.5px solid var(--text-faint);
+  border-radius:3px; flex-shrink:0; position:relative;
+  transition:border-color 180ms, background 180ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1);
+}
+.candidate.is-selected .candidate__check{
+  background:var(--gold); border-color:var(--gold);
+  transform:scale(1.1);
+}
+.candidate.is-selected .candidate__check::after{
+  content:''; position:absolute; left:4px; top:1px;
+  width:4px; height:8px;
+  border:solid var(--bg); border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+.candidate__name{
+  font-family:var(--display); font-size:14px; font-weight:500;
+  color:var(--text); margin-bottom:8px; line-height:1.35;
+}
+.candidate__meta{
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:11px; color:var(--text-faint);
+}
+.candidate__tax{ display:flex; align-items:center; gap:6px; }
+.candidate__conf{ color:var(--mist); }
+
+/* ---- Pane 2: threshold (enhanced drag) ---- */
+.empty-state{
+  border:1px dashed var(--border); border-radius:var(--radius-md);
+  padding:26px 22px; color:var(--text-faint); font-size:13px; line-height:1.7;
+  transition:border-color 0.25s, background 0.25s;
+}
+.empty-state:hover{ border-color:var(--gold-dim); background:rgba(212,162,78,0.03); }
+.empty-state b{ color:var(--text-muted); }
+
+.threshold-list{ max-height:380px; overflow-y:auto; padding-right:4px; }
+.threshold-list::-webkit-scrollbar{ width:4px; }
+.threshold-list::-webkit-scrollbar-track{ background:var(--border-soft); border-radius:4px; }
+.threshold-list::-webkit-scrollbar-thumb{ background:var(--gold-dim); border-radius:4px; }
+
+.threshold-row{
+  border:1px solid var(--border); border-radius:var(--radius-md);
+  background:var(--bg-panel-raised); padding:16px 18px; margin-bottom:10px;
+  transition:border-color 200ms, box-shadow 200ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1);
+}
+.threshold-row:hover{
+  border-color:var(--gold-dim);
+  box-shadow:0 6px 24px rgba(0,0,0,0.22);
+  transform:translateY(-2px);
+}
+.threshold-row.is-sliding{
+  border-color:var(--gold);
+  box-shadow:0 0 0 1px rgba(212,162,78,0.25), 0 8px 28px rgba(212,162,78,0.1);
+}
+.threshold-row__head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.threshold-row__name{ font-family:var(--display); font-size:13.5px; color:var(--text); }
+.threshold-row__name span{ color:var(--text-faint); font-family:var(--mono); font-size:11px; margin-left:8px; }
+.threshold-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:560px){ .threshold-grid{ grid-template-columns:1fr; } }
+
+/* ---- Sliders — enhanced drag feedback ---- */
+.field{ margin-bottom:4px; }
+.field__label{
+  display:flex; justify-content:space-between;
+  font-size:11.5px; color:var(--text-muted); margin-bottom:8px;
+}
+.field__label b{
+  color:var(--gold); font-weight:500; font-variant-numeric:tabular-nums;
+  transition:color 0.15s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+.field__label b.is-updating{
+  transform:scale(1.15);
+  color:#e3b568;
+}
+
+/* Track */
+input[type="range"]{
+  -webkit-appearance:none; width:100%; height:4px;
+  background:var(--border); border-radius:3px; outline:none;
+  transition:background 200ms;
+  position:relative;
+}
+input[type="range"]:hover{ background:var(--gold-dim); }
+input[type="range"].is-dragging{
+  background:linear-gradient(90deg, var(--gold-dim), var(--border));
+}
+
+/* Thumb */
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+  background:var(--gold);
+  border:2px solid var(--bg);
+  box-shadow:0 0 0 1px var(--gold), 0 4px 14px rgba(212,162,78,0.3);
+  transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms, background 150ms;
+}
+input[type="range"]::-webkit-slider-thumb:hover{
+  transform:scale(1.3);
+  box-shadow:0 0 0 1px var(--gold), 0 0 16px rgba(212,162,78,0.45), 0 4px 18px rgba(212,162,78,0.35);
+}
+input[type="range"].is-dragging::-webkit-slider-thumb{
+  transform:scale(1.35);
+  background:#e3b568;
+  box-shadow:0 0 0 2px var(--bg), 0 0 0 4px rgba(212,162,78,0.35), 0 0 22px rgba(212,162,78,0.5);
+}
+input[type="range"]::-moz-range-thumb{
+  width:16px; height:16px; border-radius:50%;
+  background:var(--gold); border:2px solid var(--bg);
+  box-shadow:0 0 0 1px var(--gold);
+}
+input[type="range"].is-dragging::-moz-range-thumb{
+  transform:scale(1.3);
+  background:#e3b568;
+}
+
+/* Fill track visual (via JS width on a sibling) */
+.slider-wrap{ position:relative; }
+.slider-fill{
+  position:absolute; left:0; top:50%; transform:translateY(-50%);
+  height:4px; border-radius:3px;
+  background:linear-gradient(90deg, var(--gold), #e3b568);
+  pointer-events:none; z-index:0;
+  transition:width 0.05s linear;
+  box-shadow:0 0 8px rgba(212,162,78,0.35);
+}
+.slider-wrap input[type="range"]{ position:relative; z-index:1; background:transparent; }
+.slider-wrap::before{
+  content:''; position:absolute; left:0; right:0; top:50%;
+  transform:translateY(-50%); height:4px; border-radius:3px;
+  background:var(--border); z-index:0;
+}
+
+input[type="number"]{
+  background:var(--bg-panel-raised); border:1px solid var(--border); color:var(--text);
+  font-family:var(--mono); font-size:13px; padding:8px 10px; border-radius:var(--radius-sm);
+  width:100%; outline:none;
+  transition:border-color 200ms, box-shadow 200ms;
+}
+input[type="number"]:focus{
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(212,162,78,0.1);
+}
+
+/* ---- Pane 3 ---- */
+.panel{
+  border:1px solid var(--border); border-radius:var(--radius-md);
+  background:var(--bg-panel-raised); padding:18px 18px 4px; margin-bottom:12px;
+  transition:border-color 200ms, box-shadow 200ms, transform 220ms;
+}
+.panel:hover{
+  border-color:var(--gold-dim);
+  box-shadow:0 4px 20px rgba(0,0,0,0.15);
+}
+.panel__title{
+  font-size:12px; color:var(--text-faint); margin-bottom:16px;
+  display:flex; align-items:center; gap:8px;
+}
+.params-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px 26px; }
+@media (max-width:560px){ .params-grid{ grid-template-columns:1fr; } }
+.field--full{ grid-column:1 / -1; }
+
+.balance__labels{
+  display:flex; justify-content:space-between;
+  font-size:11px; color:var(--text-faint); margin-top:8px;
+}
+.balance__labels em{ font-style:normal; color:var(--green); }
+.balance__labels em.right{ color:var(--rust); }
+
+.runbar{
+  border:1px solid var(--gold-dim); border-radius:var(--radius-md);
+  background:linear-gradient(180deg,rgba(212,162,78,0.07),rgba(212,162,78,0.02));
+  padding:14px 18px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  margin-top:6px;
+  transition:border-color 220ms, box-shadow 220ms, transform 220ms;
+}
+.runbar:hover{
+  border-color:var(--gold);
+  box-shadow:0 6px 28px rgba(212,162,78,0.08);
+  transform:translateY(-1px);
+}
+.runbar__summary{ font-size:12px; color:var(--text-muted); display:flex; gap:14px; flex-wrap:wrap; }
+.runbar__summary b{ color:var(--text); font-weight:500; }
+
+.btn-run{
+  background:var(--gold); color:#1a1206; border:none;
+  padding:12px 20px; border-radius:var(--radius-sm);
+  font-size:12.5px; font-weight:600; letter-spacing:0.01em;
+  transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1), background 140ms, box-shadow 220ms;
+  white-space:nowrap; position:relative; overflow:hidden;
+}
+.btn-run:hover:not(:disabled){
+  background:#e3b568;
+  transform:translateY(-3px);
+  box-shadow:0 10px 32px rgba(212,162,78,0.3);
+}
+.btn-run:active:not(:disabled){ transform:scale(0.97) translateY(-1px); }
+.btn-run:disabled{ background:var(--border); color:var(--text-faint); transform:none; box-shadow:none; }
+
+.pipeline{ margin-top:14px; display:none; }
+.pipeline.is-visible{ display:block; }
+.pipeline__track{ height:3px; background:var(--border); border-radius:2px; overflow:hidden; margin-bottom:10px; }
+.pipeline__fill{
+  height:100%; width:0%;
+  background:linear-gradient(90deg,var(--gold),var(--green));
+  border-radius:2px;
+}
+.pipeline__stage{ font-size:12px; color:var(--text-muted); }
+.pipeline__stage b{ color:var(--gold); font-weight:500; }
+
+/* ---- Pane 4 ---- */
+.results__grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:18px; align-items:start; }
+@media (max-width:720px){ .results__grid{ grid-template-columns:1fr; } }
+#pareto-canvas{
+  width:100%; height:250px;
+  border:1px solid var(--border); border-radius:var(--radius-md);
+  background:var(--bg-panel-raised);
+  transition:border-color 200ms, box-shadow 200ms;
+}
+#pareto-canvas:hover{
+  border-color:var(--gold-dim);
+  box-shadow:0 4px 20px rgba(0,0,0,0.2);
+}
+.results__stats{ display:flex; flex-direction:column; gap:10px; }
+.stat-line{
+  border:1px solid var(--border); border-radius:var(--radius-md);
+  padding:14px 16px; background:var(--bg-panel-raised);
+  transition:border-color 200ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 200ms;
+}
+.stat-line:hover{
+  border-color:var(--gold-dim);
+  transform:translateX(6px);
+  box-shadow:0 4px 16px rgba(0,0,0,0.15);
+}
+.stat-line span{ display:block; font-size:11px; color:var(--text-faint); margin-bottom:6px; }
+.stat-line b{ font-family:var(--display); font-size:19px; color:var(--text); font-weight:600; }
+.stat-line b.warn{ color:var(--rust); }
+
+/* ---- Footer ---- */
+footer{
+  border-top:1px solid var(--border-soft);
+  padding:24px 0 44px; position:relative; z-index:2;
+}
+footer p{ font-size:11.5px; color:var(--text-faint); max-width:640px; line-height:1.7; }
+footer code{ color:var(--gold); font-size:11px; }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+  *{ cursor:auto !important; }
+  #custom-cursor, #cursor-follower{ display:none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Custom cursor -->
+<div id="custom-cursor"></div>
+<div id="cursor-follower"></div>
+
+<div id="three-bg"></div>
+
+<div class="topbar" id="topbar">
+  <div class="topbar__brand"><span class="topbar__dot"></span>MCLP&nbsp;Runner</div>
+  <div class="topbar__coords">Phường 10 · Đà Lạt&nbsp;&nbsp;<span>108.46545, 11.92173</span></div>
+</div>
+
+<section class="hero">
+  <div class="container hero__inner">
+    <p class="hero__eyebrow">Decision Optimization · <b>MO-MCLP</b> · food_and_drink / accommodation / health_and_medicine</p>
+    <h1>Chọn candidate, khoanh vùng phủ,<br /><em>đưa ra Pareto front.</em></h1>
+    <p class="lede">
+      4 bước: chọn candidate → chỉnh threshold riêng → đặt tham số toàn cục → xem Pareto front.
+      Kéo slider, hover, click — con trỏ tùy chỉnh phản hồi theo từng vùng tương tác.
+    </p>
+  </div>
+</section>
+
+<main class="container wizard">
+  <div class="wizard__card" id="wizard-card">
+
+    <div class="stepper" id="stepper">
+      <div class="stepper__item" data-step="1">
+        <span class="stepper__circle">1</span><span class="stepper__label">Candidate</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="2">
+        <span class="stepper__circle">2</span><span class="stepper__label">Threshold</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="3">
+        <span class="stepper__circle">3</span><span class="stepper__label">Tham số</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="4">
+        <span class="stepper__circle">4</span><span class="stepper__label">Kết quả</span>
+      </div>
+    </div>
+
+    <div class="wizard__body" id="wizard-body">
+
+      <!-- PANE 1 -->
+      <div class="wizard__pane is-active" data-pane="1">
+        <div class="pane__head">
+          <h3>Chọn candidate</h3>
+          <p>Click để chọn / bỏ chọn. Lọc theo taxonomy nếu cần.</p>
+        </div>
+        <div class="toolbar">
+          <div class="filter-group" id="filter-group">
+            <button class="chip is-active" data-filter="all">Tất cả</button>
+            <button class="chip" data-filter="food_and_drink"><span class="chip__dot dot-food"></span>food_and_drink</button>
+            <button class="chip" data-filter="accommodation"><span class="chip__dot dot-stay"></span>accommodation</button>
+            <button class="chip" data-filter="health_and_medicine"><span class="chip__dot dot-health"></span>health_and_medicine</button>
+          </div>
+          <div class="select-count">Đã chọn: <b id="selected-count">0</b> / <span id="visible-count">0</span> candidate</div>
+        </div>
+        <div class="candidate-grid" id="candidate-grid"></div>
+      </div>
+
+      <!-- PANE 2 -->
+      <div class="wizard__pane" data-pane="2">
+        <div class="pane__head">
+          <h3>Điều chỉnh threshold theo candidate</h3>
+          <p>Kéo slider — thumb phát sáng, track đổ đầy, giá trị nhảy nhẹ khi thay đổi.</p>
+        </div>
+        <div class="threshold-list" id="threshold-list">
+          <div class="empty-state" id="threshold-empty">
+            Chưa có candidate nào được chọn. Quay lại <b>Bước 1</b> để chọn ít nhất một vị trí.
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 3 -->
+      <div class="wizard__pane" data-pane="3">
+        <div class="pane__head">
+          <h3>Tham số toàn cục</h3>
+          <p>Bán kính phủ theo taxonomy, confidence, P_max và tỷ trọng đánh đổi giữa hai mục tiêu.</p>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Bán kính phủ theo taxonomy (mét)</p>
+          <div class="params-grid">
+            <div class="field">
+              <div class="field__label"><span class="chip__dot dot-food"></span>&nbsp;food_and_drink<b id="val-radius-food">150 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-food"></div><input type="range" id="radius-food" min="50" max="500" step="10" value="150" /></div>
+            </div>
+            <div class="field">
+              <div class="field__label"><span class="chip__dot dot-stay"></span>&nbsp;accommodation<b id="val-radius-stay">300 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-stay"></div><input type="range" id="radius-stay" min="100" max="800" step="10" value="300" /></div>
+            </div>
+            <div class="field field--full">
+              <div class="field__label"><span class="chip__dot dot-health"></span>&nbsp;health_and_medicine<b id="val-radius-health">400 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-health"></div><input type="range" id="radius-health" min="200" max="1000" step="10" value="400" /></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Confidence &amp; ngân sách</p>
+          <div class="params-grid">
+            <div class="field">
+              <div class="field__label">Confidence tối thiểu (toàn cục)<b id="val-confidence">0.75</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-confidence"></div><input type="range" id="confidence" min="0" max="1" step="0.01" value="0.75" /></div>
+            </div>
+            <div class="field">
+              <div class="field__label">Số cơ sở tối đa — P_max</div>
+              <input type="number" id="pmax" value="8" min="1" max="50" />
+            </div>
+            <div class="field field--full">
+              <div class="field__label">Số điểm epsilon trong sweep<b id="val-epsilon">12</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-epsilon"></div><input type="range" id="epsilon-steps" min="4" max="30" step="1" value="12" /></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Trọng số mục tiêu (λ₁ · λ₂)</p>
+          <div class="field balance">
+            <div class="slider-wrap"><div class="slider-fill" id="fill-balance"></div><input type="range" id="balance" min="0" max="100" value="55" /></div>
+            <div class="balance__labels">
+              <span><em>Max covering profit</em> — f₁</span>
+              <span id="balance-readout">55 / 45</span>
+              <span><em class="right">Min cost</em> — f₂</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="runbar">
+          <div class="runbar__summary">
+            <span>Candidate: <b id="sum-candidates">0</b></span>
+            <span>Radius: <b id="sum-radius">150–400 m</b></span>
+            <span>Confidence ≥ <b id="sum-confidence">0.75</b></span>
+            <span>P_max: <b id="sum-pmax">8</b></span>
+          </div>
+          <button class="btn-run" id="btn-run">Chạy tối ưu (ε-constraint sweep)</button>
+        </div>
+
+        <div class="pipeline" id="pipeline">
+          <div class="pipeline__track"><div class="pipeline__fill" id="pipeline-fill"></div></div>
+          <p class="pipeline__stage"><b id="pipeline-stage">—</b></p>
+        </div>
+      </div>
+
+      <!-- PANE 4 -->
+      <div class="wizard__pane" data-pane="4">
+        <div class="pane__head">
+          <h3>Pareto front</h3>
+          <p>Tập nghiệm không trội từ epsilon-constraint sweep.</p>
+        </div>
+        <div class="results__grid">
+          <canvas id="pareto-canvas"></canvas>
+          <div class="results__stats">
+            <div class="stat-line"><span>Điểm Pareto tìm được</span><b id="stat-points">—</b></div>
+            <div class="stat-line"><span>Optimality gap trung bình</span><b id="stat-gap">—</b></div>
+            <div class="stat-line"><span>Điểm bị gắn cờ non-monotonic</span><b class="warn" id="stat-flagged">—</b></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="wizard__nav">
+      <button class="btn-ghost" id="btn-back">← Quay lại</button>
+      <span class="wizard__hint" id="wizard-hint"></span>
+      <button class="btn-next" id="btn-next">Tiếp tục →</button>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Giao diện demo (dữ liệu candidate mô phỏng). Khi nối backend, nút "Chạy tối ưu" gọi
+      <code>epsilon_constraint_sweep_v2</code> trên OR-Tools CP-SAT.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ================================================================
+     0. CUSTOM CURSOR (GSAP)
+  ================================================================ */
+  (function initCursor() {
+    if (reduceMotion) return;
+    var cursor = document.getElementById("custom-cursor");
+    var follower = document.getElementById("cursor-follower");
+    if (!cursor || !follower || !window.gsap) return;
+
+    document.addEventListener("mousemove", function (e) {
+      gsap.set(cursor, { x: e.clientX, y: e.clientY });
+      gsap.to(follower, {
+        x: e.clientX,
+        y: e.clientY,
+        duration: 0.18,
+        ease: "power2.out"
+      });
+    });
+
+    function bindInteractive() {
+      var els = document.querySelectorAll(
+        'button, a, .candidate, .stepper__item, .chip, .threshold-row, .stat-line, .panel, input[type="range"], input[type="number"], .runbar'
+      );
+      els.forEach(function (el) {
+        if (el._cursorBound) return;
+        el._cursorBound = true;
+        el.addEventListener("mouseenter", function () {
+          follower.classList.add("cursor-active");
+        });
+        el.addEventListener("mouseleave", function () {
+          follower.classList.remove("cursor-active");
+          follower.classList.remove("cursor-drag");
+        });
+      });
+    }
+    bindInteractive();
+    // Re-bind when dynamic content changes
+    window._rebindCursor = bindInteractive;
+
+    document.addEventListener("mouseleave", function () {
+      cursor.classList.add("cursor-hidden");
+      follower.classList.add("cursor-hidden");
+    });
+    document.addEventListener("mouseenter", function () {
+      cursor.classList.remove("cursor-hidden");
+      follower.classList.remove("cursor-hidden");
+    });
+
+    // Drag state on any range
+    document.addEventListener("mousedown", function (e) {
+      if (e.target.matches && e.target.matches('input[type="range"]')) {
+        follower.classList.add("cursor-drag");
+      }
+    });
+    document.addEventListener("mouseup", function () {
+      follower.classList.remove("cursor-drag");
+    });
+  })();
+
+  /* ================================================================
+     1. THREE.JS BACKGROUND
+  ================================================================ */
+  (function initThree() {
+    var container = document.getElementById("three-bg");
+    if (!container || !window.THREE) return;
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1512);
+    var camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2, 8);
+    camera.lookAt(0, 0, 0);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(renderer.domElement);
+
+    var particleCount = 700;
+    var positions = new Float32Array(particleCount * 3);
+    for (var i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 20;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 12;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 8 - 4;
+    }
+    var particles = new THREE.Points(
+      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(positions, 3)),
+      new THREE.PointsMaterial({
+        color: 0xd4a24e, size: 0.055, transparent: true, opacity: 0.3,
+        blending: THREE.AdditiveBlending, sizeAttenuation: true
+      })
+    );
+    scene.add(particles);
+
+    var ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.6, 0.022, 24, 80),
+      new THREE.MeshBasicMaterial({ color: 0x5b9279, transparent: true, opacity: 0.13 })
+    );
+    ring.position.y = 0.2;
+    scene.add(ring);
+
+    var ring2 = new THREE.Mesh(
+      new THREE.TorusGeometry(2.4, 0.014, 16, 80),
+      new THREE.MeshBasicMaterial({ color: 0xd4a24e, transparent: true, opacity: 0.06 })
+    );
+    ring2.position.y = -0.4;
+    scene.add(ring2);
+
+    var mouseX = 0, mouseY = 0;
+    document.addEventListener("mousemove", function (e) {
+      mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    });
+    window.addEventListener("resize", function () {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    var time = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      if (reduceMotion) { renderer.render(scene, camera); return; }
+      time += 0.004;
+      particles.rotation.y += 0.00028;
+      particles.rotation.x = Math.sin(time * 0.1) * 0.025;
+      ring.rotation.x = Math.sin(time * 0.2) * 0.14;
+      ring.rotation.z += 0.0018;
+      ring2.rotation.x = Math.sin(time * 0.15 + 0.5) * 0.09;
+      ring2.rotation.z -= 0.0025;
+      camera.position.x += (mouseX * 0.28 - camera.position.x) * 0.008;
+      camera.position.y += (mouseY * 0.18 + 2 - camera.position.y) * 0.008;
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    animate();
+  })();
+
+  /* ================================================================
+     2. RIPPLE
+  ================================================================ */
+  function createRipple(e, el) {
+    if (reduceMotion) return;
+    var rect = el.getBoundingClientRect();
+    var size = Math.max(rect.width, rect.height);
+    var ripple = document.createElement("span");
+    ripple.className = "ripple";
+    ripple.style.width = ripple.style.height = size + "px";
+    ripple.style.left = e.clientX - rect.left - size / 2 + "px";
+    ripple.style.top = e.clientY - rect.top - size / 2 + "px";
+    el.appendChild(ripple);
+    setTimeout(function () { ripple.remove(); }, 560);
+  }
+
+  /* ================================================================
+     3. SLIDER FILL + DRAG ENHANCEMENT
+  ================================================================ */
+  function updateSliderFill(input) {
+    var wrap = input.closest(".slider-wrap");
+    if (!wrap) return;
+    var fill = wrap.querySelector(".slider-fill");
+    if (!fill) return;
+    var min = parseFloat(input.min) || 0;
+    var max = parseFloat(input.max) || 100;
+    var val = parseFloat(input.value);
+    var pct = ((val - min) / (max - min)) * 100;
+    fill.style.width = pct + "%";
+  }
+
+  function enhanceSlider(input, valueEl) {
+    updateSliderFill(input);
+
+    input.addEventListener("input", function () {
+      updateSliderFill(input);
+      if (valueEl) {
+        valueEl.classList.add("is-updating");
+        clearTimeout(valueEl._updTimer);
+        valueEl._updTimer = setTimeout(function () {
+          valueEl.classList.remove("is-updating");
+        }, 180);
+      }
+    });
+
+    input.addEventListener("mousedown", function () {
+      input.classList.add("is-dragging");
+      var row = input.closest(".threshold-row");
+      if (row) row.classList.add("is-sliding");
+    });
+    input.addEventListener("mouseup", function () {
+      input.classList.remove("is-dragging");
+      var row = input.closest(".threshold-row");
+      if (row) row.classList.remove("is-sliding");
+    });
+    input.addEventListener("mouseleave", function () {
+      // keep dragging class if still pressed — handled by document mouseup
+    });
+    document.addEventListener("mouseup", function () {
+      input.classList.remove("is-dragging");
+      var row = input.closest(".threshold-row");
+      if (row) row.classList.remove("is-sliding");
+    });
+  }
+
+  /* ================================================================
+     4. DATA + GRID
+  ================================================================ */
+  var TAX = {
+    food_and_drink: { label: "food_and_drink", dot: "dot-food" },
+    accommodation: { label: "accommodation", dot: "dot-stay" },
+    health_and_medicine: { label: "health_and_medicine", dot: "dot-health" }
+  };
+  var STREETS = [
+    "Trần Hưng Đạo", "Hồ Xuân Hương", "Yersin", "Phù Đổng Thiên Vương",
+    "Nguyễn Chí Thanh", "Bùi Thị Xuân", "Xô Viết Nghệ Tĩnh", "Ba Tháng Hai",
+    "Nguyễn Văn Trỗi", "Lê Đại Hành", "Phan Đình Phùng", "Trần Phú",
+    "Đống Đa", "Hoàng Văn Thụ"
+  ];
+  var TAX_KEYS = Object.keys(TAX);
+  var candidates = STREETS.map(function (street, i) {
+    var tax = TAX_KEYS[i % TAX_KEYS.length];
+    return {
+      id: "C-" + String(i + 1).padStart(2, "0"),
+      name: "Trục " + street,
+      taxonomy: tax,
+      confidence: (0.62 + (i % 5) * 0.07).toFixed(2)
+    };
+  });
+
+  var selected = new Set();
+  var activeFilter = "all";
+  var grid = document.getElementById("candidate-grid");
+  var selectedCountEl = document.getElementById("selected-count");
+  var visibleCountEl = document.getElementById("visible-count");
+
+  function renderGrid() {
+    grid.innerHTML = "";
+    var visible = candidates.filter(function (c) {
+      return activeFilter === "all" || c.taxonomy === activeFilter;
+    });
+    visibleCountEl.textContent = visible.length;
+
+    visible.forEach(function (c, idx) {
+      var card = document.createElement("div");
+      card.className = "candidate" + (selected.has(c.id) ? " is-selected" : "");
+      card.dataset.id = c.id;
+      card.draggable = true;
+      card.innerHTML =
+        '<div class="candidate__top">' +
+          '<span class="candidate__id">' + c.id + '</span>' +
+          '<span class="candidate__check"></span>' +
+        '</div>' +
+        '<div class="candidate__name">' + c.name + '</div>' +
+        '<div class="candidate__meta">' +
+          '<span class="candidate__tax"><span class="chip__dot ' + TAX[c.taxonomy].dot + '"></span>' + TAX[c.taxonomy].label + '</span>' +
+          '<span class="candidate__conf">conf ' + c.confidence + '</span>' +
+        '</div>';
+
+      card.addEventListener("click", function (e) {
+        createRipple(e, card);
+        toggleCandidate(c.id, card);
+      });
+      card.addEventListener("dragstart", function (e) {
+        card.classList.add("is-dragging");
+        e.dataTransfer.setData("text/plain", c.id);
+        if (!reduceMotion && window.gsap) gsap.to(card, { scale: 0.95, opacity: 0.6, duration: 0.2 });
+      });
+      card.addEventListener("dragend", function () {
+        card.classList.remove("is-dragging");
+        if (!reduceMotion && window.gsap) gsap.to(card, { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(2)" });
+      });
+
+      grid.appendChild(card);
+      if (!reduceMotion && window.gsap) {
+        gsap.from(card, { duration: 0.32, y: 18, opacity: 0, ease: "power2.out", delay: Math.min(idx * 0.028, 0.4) });
+      }
+    });
+    if (window._rebindCursor) window._rebindCursor();
+  }
+
+  function toggleCandidate(id, cardEl) {
+    if (selected.has(id)) selected.delete(id);
+    else selected.add(id);
+    cardEl.classList.toggle("is-selected");
+    if (!reduceMotion && window.gsap) {
+      gsap.fromTo(cardEl, { scale: 0.94 }, { scale: 1, duration: 0.32, ease: "back.out(2.6)" });
+    }
+    selectedCountEl.textContent = selected.size;
+    renderThresholdList();
+    updateSummary();
+    updateNav();
+  }
+
+  document.getElementById("filter-group").addEventListener("click", function (e) {
+    var btn = e.target.closest(".chip");
+    if (!btn) return;
+    createRipple(e, btn);
+    document.querySelectorAll("#filter-group .chip").forEach(function (c) { c.classList.remove("is-active"); });
+    btn.classList.add("is-active");
+    activeFilter = btn.dataset.filter;
+    renderGrid();
+  });
+
+  /* ================================================================
+     5. THRESHOLD (with enhanced sliders)
+  ================================================================ */
+  var thresholdList = document.getElementById("threshold-list");
+  var thresholdEmpty = document.getElementById("threshold-empty");
+  var perCandidateParams = {};
+
+  function renderThresholdList() {
+    var ids = Array.from(selected);
+    thresholdList.querySelectorAll(".threshold-row").forEach(function (el) { el.remove(); });
+
+    if (ids.length === 0) {
+      thresholdEmpty.style.display = "block";
+      return;
+    }
+    thresholdEmpty.style.display = "none";
+
+    ids.forEach(function (id, idx) {
+      var c = candidates.find(function (x) { return x.id === id; });
+      if (!perCandidateParams[id]) {
+        perCandidateParams[id] = { demand: 0.5, conf: parseFloat(c.confidence) };
+      }
+      var p = perCandidateParams[id];
+
+      var row = document.createElement("div");
+      row.className = "threshold-row";
+      row.innerHTML =
+        '<div class="threshold-row__head">' +
+          '<span class="threshold-row__name">' + c.name + '<span>' + c.id + ' · ' + TAX[c.taxonomy].label + '</span></span>' +
+        '</div>' +
+        '<div class="threshold-grid">' +
+          '<div class="field">' +
+            '<div class="field__label">Demand-weight threshold<b class="dw-val">' + p.demand.toFixed(2) + '</b></div>' +
+            '<div class="slider-wrap"><div class="slider-fill"></div><input type="range" class="dw-slider" min="0" max="1" step="0.01" value="' + p.demand + '"></div>' +
+          '</div>' +
+          '<div class="field">' +
+            '<div class="field__label">Confidence tối thiểu<b class="cf-val">' + p.conf.toFixed(2) + '</b></div>' +
+            '<div class="slider-wrap"><div class="slider-fill"></div><input type="range" class="cf-slider" min="0" max="1" step="0.01" value="' + p.conf + '"></div>' +
+          '</div>' +
+        '</div>';
+
+      var dwInput = row.querySelector(".dw-slider");
+      var cfInput = row.querySelector(".cf-slider");
+      var dwVal = row.querySelector(".dw-val");
+      var cfVal = row.querySelector(".cf-val");
+
+      dwInput.addEventListener("input", function (e) {
+        p.demand = parseFloat(e.target.value);
+        dwVal.textContent = p.demand.toFixed(2);
+      });
+      cfInput.addEventListener("input", function (e) {
+        p.conf = parseFloat(e.target.value);
+        cfVal.textContent = p.conf.toFixed(2);
+      });
+
+      enhanceSlider(dwInput, dwVal);
+      enhanceSlider(cfInput, cfVal);
+
+      thresholdList.appendChild(row);
+
+      if (!reduceMotion && window.gsap) {
+        gsap.from(row, { duration: 0.3, y: 14, opacity: 0, ease: "power2.out", delay: idx * 0.05 });
+      }
+    });
+    if (window._rebindCursor) window._rebindCursor();
+  }
+
+  /* ================================================================
+     6. GLOBAL PARAMS
+  ================================================================ */
+  function bindRange(id, valId, fillId, fmt) {
+    var input = document.getElementById(id);
+    var out = document.getElementById(valId);
+    enhanceSlider(input, out);
+    input.addEventListener("input", function () {
+      out.textContent = fmt(input.value);
+      updateSummary();
+    });
+  }
+  bindRange("radius-food", "val-radius-food", "fill-radius-food", function (v) { return v + " m"; });
+  bindRange("radius-stay", "val-radius-stay", "fill-radius-stay", function (v) { return v + " m"; });
+  bindRange("radius-health", "val-radius-health", "fill-radius-health", function (v) { return v + " m"; });
+  bindRange("confidence", "val-confidence", "fill-confidence", function (v) { return parseFloat(v).toFixed(2); });
+  bindRange("epsilon-steps", "val-epsilon", "fill-epsilon", function (v) { return v; });
+
+  document.getElementById("pmax").addEventListener("input", updateSummary);
+
+  var balanceInput = document.getElementById("balance");
+  var balanceReadout = document.getElementById("balance-readout");
+  enhanceSlider(balanceInput, null);
+  balanceInput.addEventListener("input", function () {
+    var v = parseInt(balanceInput.value, 10);
+    balanceReadout.textContent = v + " / " + (100 - v);
+  });
+
+  function updateSummary() {
+    document.getElementById("sum-candidates").textContent = selected.size;
+    document.getElementById("sum-radius").textContent =
+      document.getElementById("radius-food").value + "–" + document.getElementById("radius-health").value + " m";
+    document.getElementById("sum-confidence").textContent =
+      parseFloat(document.getElementById("confidence").value).toFixed(2);
+    document.getElementById("sum-pmax").textContent = document.getElementById("pmax").value;
+  }
+
+  /* ================================================================
+     7. PIPELINE
+  ================================================================ */
+  var STAGES = [
+    "Dựng covering constraints (build_base_template)…",
+    "Nhân bản model theo từng epsilon (proto_copy)…",
+    "Giải song song theo batch — CP-SAT subprocess…",
+    "Truyền hint giữa các batch (inter-batch hint chaining)…",
+    "Tổng hợp Pareto front, gắn cờ non-monotonic…"
+  ];
+  var btnRun = document.getElementById("btn-run");
+  var pipelineEl = document.getElementById("pipeline");
+  var fillEl = document.getElementById("pipeline-fill");
+  var stageEl = document.getElementById("pipeline-stage");
+
+  btnRun.addEventListener("click", function (e) {
+    if (selected.size === 0) return;
+    createRipple(e, btnRun);
+    btnRun.disabled = true;
+    pipelineEl.classList.add("is-visible");
+    fillEl.style.width = "0%";
+    var i = 0;
+    function nextStage() {
+      if (i >= STAGES.length) {
+        stageEl.innerHTML = "<b>Hoàn tất.</b> Đã tổng hợp Pareto front.";
+        populateResults();
+        btnRun.disabled = false;
+        if (!reduceMotion && window.gsap) gsap.delayedCall(0.55, function () { goToStep(4); });
+        else setTimeout(function () { goToStep(4); }, 400);
+        return;
+      }
+      stageEl.innerHTML = "<b>" + (i + 1) + "/" + STAGES.length + "</b>&nbsp;" + STAGES[i];
+      var pct = Math.round(((i + 1) / STAGES.length) * 100);
+      if (!reduceMotion && window.gsap) gsap.to(fillEl, { width: pct + "%", duration: 0.55, ease: "power1.inOut" });
+      else fillEl.style.width = pct + "%";
+      i++;
+      setTimeout(nextStage, reduceMotion ? 70 : 500);
+    }
+    nextStage();
+  });
+
+  /* ================================================================
+     8. RESULTS
+  ================================================================ */
+  function populateResults() {
+    document.getElementById("stat-points").textContent = "11";
+    document.getElementById("stat-gap").textContent = "1.6 %";
+    document.getElementById("stat-flagged").textContent = "1 / 11";
+    if (!reduceMotion && window.gsap) {
+      gsap.from(".stat-line", { opacity: 0, x: 18, duration: 0.4, stagger: 0.07, ease: "power2.out" });
+    }
+    drawPareto();
+  }
+
+  function drawPareto() {
+    var canvas = document.getElementById("pareto-canvas");
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    var w = rect.width, h = rect.height, pad = 34;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = "#263a30";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, 12); ctx.lineTo(pad, h - pad); ctx.lineTo(w - 12, h - pad);
+    ctx.stroke();
+    ctx.fillStyle = "#5c6d62";
+    ctx.font = "11px IBM Plex Mono, monospace";
+    ctx.fillText("f2 — cost →", w - 78, h - 12);
+    ctx.save();
+    ctx.translate(14, pad + 6);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("f1 — coverage →", 0, 0);
+    ctx.restore();
+
+    var n = 11, points = [];
+    for (var k = 0; k < n; k++) {
+      var t = k / (n - 1);
+      points.push({
+        x: pad + t * (w - pad - 24),
+        y: (h - pad) - Math.pow(t, 0.62) * (h - pad - 24),
+        flagged: k === 7
+      });
+    }
+
+    function drawDots(alpha) {
+      ctx.clearRect(pad + 0.5, 0, w - pad - 0.5, h - pad - 0.5);
+      ctx.strokeStyle = "rgba(91,146,121," + alpha + ")";
+      ctx.beginPath();
+      points.forEach(function (p, idx) { idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
+      ctx.stroke();
+      points.forEach(function (p) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.flagged ? 5.5 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.flagged ? "#b5602e" : "#d4a24e";
+        ctx.globalAlpha = alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    if (!reduceMotion && window.gsap) {
+      var progress = { v: 0 };
+      gsap.to(progress, { v: 1, duration: 0.85, ease: "power2.out", onUpdate: function () { drawDots(progress.v); } });
+    } else drawDots(1);
+  }
+
+  /* ================================================================
+     9. NAVIGATION
+  ================================================================ */
+  var currentStep = 1;
+  var wizardBody = document.getElementById("wizard-body");
+  var stepperItems = document.querySelectorAll(".stepper__item");
+  var stepperLines = document.querySelectorAll(".stepper__line");
+  var btnBack = document.getElementById("btn-back");
+  var btnNext = document.getElementById("btn-next");
+  var wizardHint = document.getElementById("wizard-hint");
+
+  function renderStepper(step) {
+    stepperItems.forEach(function (it) {
+      var s = parseInt(it.dataset.step, 10);
+      it.classList.toggle("is-active", s === step);
+      it.classList.toggle("is-done", s < step);
+      it.dataset.clickable = s < step ? "true" : "false";
+    });
+    stepperLines.forEach(function (line, i) {
+      line.classList.toggle("is-done", i + 1 < step);
+    });
+  }
+
+  function updateNav() {
+    btnBack.disabled = currentStep === 1;
+    if (currentStep === 1) {
+      btnNext.style.display = "inline-block";
+      btnNext.textContent = "Tiếp tục →";
+      btnNext.disabled = selected.size === 0;
+      wizardHint.textContent = selected.size === 0 ? "Chọn ít nhất 1 candidate để tiếp tục" : "";
+    } else if (currentStep === 2) {
+      btnNext.style.display = "inline-block";
+      btnNext.textContent = "Tiếp tục →";
+      btnNext.disabled = false;
+      wizardHint.textContent = "";
+    } else if (currentStep === 3) {
+      btnNext.style.display = "none";
+      wizardHint.textContent = 'Nhấn "Chạy tối ưu" bên dưới để xem kết quả';
+    } else {
+      btnNext.style.display = "none";
+      wizardHint.textContent = 'Hoàn tất — dùng "Quay lại" để chỉnh tham số khác';
+    }
+  }
+
+  function goToStep(target) {
+    if (target === currentStep || target < 1 || target > 4) return;
+    var direction = target > currentStep ? 1 : -1;
+    var fromPane = wizardBody.querySelector('.wizard__pane[data-pane="' + currentStep + '"]');
+    var toPane = wizardBody.querySelector('.wizard__pane[data-pane="' + target + '"]');
+
+    function finish() {
+      currentStep = target;
+      renderStepper(currentStep);
+      updateNav();
+      if (!reduceMotion && window.gsap) {
+        gsap.from(toPane.querySelectorAll(".pane__head, .panel, .runbar, .candidate-grid, .threshold-list, .results__grid"), {
+          duration: 0.38, y: 12, opacity: 0, ease: "power2.out", stagger: 0.04, delay: 0.08
+        });
+      }
+      if (window._rebindCursor) window._rebindCursor();
+    }
+
+    if (reduceMotion || !window.gsap) {
+      fromPane.classList.remove("is-active");
+      toPane.classList.add("is-active");
+      finish();
+      return;
+    }
+    gsap.to(fromPane, {
+      opacity: 0, x: -26 * direction, duration: 0.18, ease: "power1.in",
+      onComplete: function () {
+        fromPane.classList.remove("is-active");
+        gsap.set(toPane, { opacity: 0, x: 26 * direction });
+        toPane.classList.add("is-active");
+        gsap.to(toPane, { opacity: 1, x: 0, duration: 0.32, ease: "power2.out" });
+        finish();
+      }
+    });
+  }
+
+  btnNext.addEventListener("click", function (e) { createRipple(e, btnNext); goToStep(currentStep + 1); });
+  btnBack.addEventListener("click", function (e) { createRipple(e, btnBack); goToStep(currentStep - 1); });
+  stepperItems.forEach(function (it) {
+    it.addEventListener("click", function () {
+      if (it.dataset.clickable === "true") goToStep(parseInt(it.dataset.step, 10));
+    });
+  });
+
+  /* ================================================================
+     10. TOPBAR + ENTRANCE
+  ================================================================ */
+  var topbar = document.getElementById("topbar");
+  window.addEventListener("scroll", function () {
+    topbar.classList.toggle("scrolled", window.scrollY > 12);
+  });
+
+  if (!reduceMotion && window.gsap) {
+    gsap.from(".topbar", { y: -18, opacity: 0, duration: 0.45, ease: "power2.out" });
+    gsap.from(".hero__inner > *", { y: 20, opacity: 0, duration: 0.55, stagger: 0.09, delay: 0.1, ease: "power2.out" });
+    gsap.from("#wizard-card", { y: 30, opacity: 0, duration: 0.6, delay: 0.25, ease: "power3.out" });
+  }
+
+  /* ================================================================
+     11. INIT
+  ================================================================ */
+  renderGrid();
+  renderThresholdList();
+  updateSummary();
+  renderStepper(currentStep);
+  updateNav();
+
+  // Init all global slider fills
+  ["radius-food", "radius-stay", "radius-health", "confidence", "epsilon-steps", "balance"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) updateSliderFill(el);
+  });
+
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      var pane4 = document.querySelector('.wizard__pane[data-pane="4"]');
+      if (pane4 && pane4.classList.contains("is-active")) drawPareto();
+    }, 280);
+  });
+
+})();
+</script>
+</body>
+</html>

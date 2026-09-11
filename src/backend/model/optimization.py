@@ -120,7 +120,7 @@ class Optimization:
         )
 
     # ------------------------------------------------------------------ #
-    # 3. Base CP-SAT template — mạnh hơn với singleton cover + symmetry
+    # 3. Base CP-SAT template — mạnh hơn với singleton cover
     # ------------------------------------------------------------------ #
     def build_base_template(self):
         if self.data is None:
@@ -138,10 +138,10 @@ class Optimization:
             if covering_js.size == 0:
                 mdl.Add(y[i] == 0)
             elif covering_js.size == 1:
-                # Singleton: y_i <=> x_j  (mạnh hơn inequality)
+                # Singleton: y_i <=> x_j (chặt hơn inequality thuần)
                 j = int(covering_js[0])
                 mdl.Add(y[i] <= x[j])
-                mdl.Add(x[j] <= y[i])  # có thể bỏ nếu không muốn force, nhưng giúp bound
+                mdl.Add(x[j] <= y[i])
             else:
                 mdl.Add(y[i] <= sum(x[j] for j in covering_js))
 
@@ -151,11 +151,6 @@ class Optimization:
 
         if data.P_max is not None:
             mdl.Add(sum(x) <= data.P_max)
-            # Symmetry breaking nhẹ: ưu tiên index nhỏ khi số facility bằng nhau
-            # (giúp giảm đối xứng khi nhiều candidate tương đương)
-            if data.P_max >= 2 and n_j >= 2:
-                # Không bắt buộc chặt — chỉ gợi ý qua hint sau này
-                pass
 
         if data.budget is not None:
             c_int = np.round(data.c * self.SCALE).astype(np.int64)
@@ -165,10 +160,10 @@ class Optimization:
         return mdl, x, y
 
     # ------------------------------------------------------------------ #
-    # 3b. Greedy constructive heuristic — warm-start chất lượng cao
+    # 3b. Greedy constructive heuristic — warm-start
     # ------------------------------------------------------------------ #
     def _greedy_solution(self, eps: float) -> Optional[List[int]]:
-        """Chọn lần lượt candidate mang lại p_i chưa phủ nhiều nhất / chi phí,
+        """Chọn lần lượt candidate mang lại p_i chưa phủ / chi phí cao nhất,
         dưới ngân sách eps và P_max. Trả về vector x nhị phân hoặc None."""
         data = self.data
         n_j = data.n_j
@@ -177,11 +172,9 @@ class Optimization:
         P_max = data.P_max if data.P_max is not None else n_j
 
         covered = np.zeros(data.n_i, dtype=bool)
-        chosen = []
+        chosen: List[int] = []
         remaining_budget = float(eps)
 
-        # Precompute coverage lists phía candidate (transpose nhẹ)
-        # coverage_lists[i] = candidates phủ i → xây invert
         cand_covers: List[List[int]] = [[] for _ in range(n_j)]
         for i, js in enumerate(data.coverage_lists):
             for j in js:
@@ -196,18 +189,18 @@ class Optimization:
                 gain = 0.0
                 for i in cand_covers[j]:
                     if not covered[i]:
-                        gain += p[i]
+                        gain += float(p[i])
                 if c[j] <= 1e-12:
-                    score = gain * 1e6  # free facility
+                    score = gain * 1e6
                 else:
-                    score = gain / c[j]
+                    score = gain / float(c[j])
                 if score > best_score:
                     best_score = score
                     best_j = j
             if best_j < 0 or best_score <= 0:
                 break
             chosen.append(best_j)
-            remaining_budget -= c[best_j]
+            remaining_budget -= float(c[best_j])
             for i in cand_covers[best_j]:
                 covered[i] = True
 
@@ -229,30 +222,26 @@ class Optimization:
         if data.budget is not None:
             eps_max = float(data.budget)
         elif data.P_max is not None and data.P_max < data.n_j:
-            # Ngân sách hữu ích tối đa = tổng P_max candidate đắt nhất
             top = np.sort(c)[-data.P_max:]
             eps_max = float(top.sum())
         else:
             eps_max = float(c.sum())
 
-        # Đảm bảo eps_max >= eps_min
         eps_max = max(eps_max, eps_min)
         return eps_min, eps_max
 
     def _make_epsilons(self) -> np.ndarray:
-        """Sinh điểm ε: dày hơn ở vùng thấp-trung (thường khó chứng minh gap hơn)."""
+        """Sinh điểm ε dày hơn ở vùng thấp-trung (khó chứng minh gap hơn)."""
         eps_min, eps_max = self._compute_epsilon_range()
         if self.n_points <= 2:
             return np.array([eps_min, eps_max], dtype=float)
 
-        # 60% điểm phân bố đều trên [min, mid], 40% trên [mid, max]
         mid = eps_min + 0.55 * (eps_max - eps_min)
         n_low = max(2, int(round(self.n_points * 0.6)))
-        n_high = self.n_points - n_low + 1  # +1 vì mid trùng
+        n_high = self.n_points - n_low + 1
         low = np.linspace(eps_min, mid, n_low)
-        high = np.linspace(mid, eps_max, n_high)[1:]  # bỏ mid trùng
+        high = np.linspace(mid, eps_max, n_high)[1:]
         eps = np.unique(np.concatenate([low, high]))
-        # Đảm bảo đúng số lượng gần đúng
         if len(eps) > self.n_points:
             idx = np.linspace(0, len(eps) - 1, self.n_points).astype(int)
             eps = eps[idx]
@@ -283,13 +272,10 @@ class Optimization:
         print(f"[INFO] Số điểm ε thực tế: {len(epsilons)}")
 
         results: list = []
-        # Greedy cho ε lớn nhất → hint ban đầu tốt
         hint_x = self._greedy_solution(float(epsilons[-1])) if self.use_hint else None
         if hint_x is not None:
             print(f"[OK] Greedy warm-start: {sum(hint_x)} facilities")
 
-        # Ưu tiên giải tuần tự khi n_parallel=1 để hint lan truyền tốt nhất
-        # (gap nhỏ quan trọng hơn tốc độ song song)
         ctx = mp.get_context("fork")
 
         with ProcessPoolExecutor(max_workers=self.n_parallel, mp_context=ctx) as ex:
@@ -297,18 +283,15 @@ class Optimization:
                 batch_eps = epsilons[batch_start: batch_start + self.n_parallel]
                 tasks = []
                 for eps in batch_eps:
-                    # Với mỗi ε, nếu có hint toàn cục thì filter theo ngân sách
                     local_hint = None
                     if hint_x is not None and self.use_hint:
-                        # Chỉ giữ các facility có tổng cost <= eps
                         cost_so_far = 0.0
                         filtered = [0] * n_j
-                        # Ưu tiên facility có trong hint, theo thứ tự index
                         order = [j for j in range(n_j) if hint_x[j]]
                         for j in order:
                             if cost_so_far + data.c[j] <= eps + 1e-9:
                                 filtered[j] = 1
-                                cost_so_far += data.c[j]
+                                cost_so_far += float(data.c[j])
                         local_hint = filtered
 
                     tasks.append(
@@ -332,15 +315,9 @@ class Optimization:
                         print(f"  → ε={eps_val:.4f} FAILED (infeasible / no solution trong time_limit)")
                         continue
                     new_x = r.pop("x_solution")
-                    # Cập nhật hint toàn cục nếu nghiệm mới tốt hơn (nhiều covering hơn)
+                    # Luôn cập nhật hint theo nghiệm mới nhất để lan truyền tốt trên Pareto
                     if self.use_hint:
-                        if hint_x is None or r["f1_covering_profit"] >= (
-                            sum(data.p[i] for i in range(n_i) if False)  # placeholder
-                        ):
-                            hint_x = new_x
-                        else:
-                            # Luôn cập nhật hint theo nghiệm mới nhất (lan truyền tốt trên Pareto)
-                            hint_x = new_x
+                        hint_x = new_x
                     results.append(r)
                     print(
                         f"  → ε={r['epsilon']:.4f}  f1={r['f1_covering_profit']:.3f}  "
@@ -377,7 +354,7 @@ class Optimization:
     ) -> None:
         """Re-solve điểm non-monotonic hoặc gap > 8% với time dài hơn + gap chặt hơn."""
         data = self.data
-        gap_threshold = 8.0  # chặt hơn trước (15%)
+        gap_threshold = 8.0
         flagged_idx = [
             idx for idx, r in enumerate(results)
             if r["flagged_non_monotonic"] or r["optimality_gap_pct"] > gap_threshold
@@ -394,7 +371,6 @@ class Optimization:
             eps = results[idx]["epsilon"]
             print(f"  → Re-solving ε={eps:.4f} ...", end=" ", flush=True)
 
-            # Ưu tiên hint từ chính nghiệm hiện tại của điểm đó, fallback best_hint
             current_chosen = results[idx].get("chosen_candidates", [])
             local_hint = [0] * n_j
             for j in current_chosen:

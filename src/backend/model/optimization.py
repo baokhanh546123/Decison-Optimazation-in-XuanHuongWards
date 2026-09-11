@@ -1,21 +1,56 @@
 from __future__ import annotations
 
 """
-MO-MCLP ε-constraint optimizer.
+================================================================================
+optimization.py — Multi-Objective Maximal Covering Location Problem (MO-MCLP)
+                 ε-constraint solver (OR-Tools CP-SAT)
+================================================================================
 
-Hai chế độ thử nghiệm / production:
+Bối cảnh Decision Intelligence
+------------------------------
+Bài toán định vị cơ sở (facility location) cần cân bằng hai mục tiêu mâu thuẫn:
+  f1  max covering profit   Σ p_i y_i     (phủ nhu cầu / lợi nhuận)
+  f2  min cost              Σ c_j x_j     (chi phí mở cơ sở)
 
-1) mode notebook (mặc định khi gọi epsilon_constraint_sweep_notebook hoặc
-   eps_mode="notebook", auto_reduce=False):
-   - KHÔNG giảm |J| (giống Optimization_fixed.ipynb)
-   - ε ∈ [min(c), sum(c)] hoặc budget — linspace đều
-   - greedy hint 1 lần, tham số song song giống notebook
+Phương pháp ε-constraint giữ f1 làm objective, biến f2 thành ràng buộc ngân sách:
+  max  Σ p_i y_i
+  s.t. Σ c_j x_j  ≤  ε
+       y_i ≤ Σ_j a_ij x_j
+       Σ x_j ≤ P_max   (nếu có)
+       x_j, y_i ∈ {0,1}
 
-2) mode tight (eps_mode="tight", auto_reduce=True):
-   - ε_max = tổng top-P_max costs
-   - có thể prefilter top-K candidate theo coverage weight
+Quét ε trên [ε_min, ε_max] sinh tập nghiệm Pareto phục vụ ra quyết định.
 
-Commit này: phiên bản THỬ NGHIỆM không reduction, bám ipynb.
+Hai chế độ (eps_mode)
+---------------------
+┌────────────┬────────────────────────────────────────────────────────────────┐
+│ notebook   │ Bám Optimization_fixed.ipynb — dùng để thử nghiệm / đối chiếu. │
+│            │ • KHÔNG giảm tập candidate |J| (auto_reduce=False)              │
+│            │ • ε_max = Σ c_j  (hoặc budget nếu có)                           │
+│            │ • ε lấy đều bằng np.linspace                                    │
+│            │ • Greedy warm-start 1 lần                                      │
+│            │ • Default song song: n_parallel=4, workers_per_solve=2         │
+│            │ ⚠ Với |J| ≈ 5000 và P_max nhỏ, gap có thể rất cao — dự kiến.  │
+├────────────┼────────────────────────────────────────────────────────────────┤
+│ tight      │ Hướng production — siết miền ε và (tuỳ chọn) giảm |J|.         │
+│            │ • ε_max = tổng P_max candidate đắt nhất (trade-off thật)       │
+│            │ • auto_reduce=True: giữ top-K candidate theo coverage weight   │
+│            │ • Phù hợp máy ít CPU khi cần gap ổn định hơn                   │
+└────────────┴────────────────────────────────────────────────────────────────┘
+
+Cách gọi nhanh
+--------------
+  # Mode notebook (thử nghiệm, không reduction) — khuyến nghị đối chiếu ipynb
+  opt = Optimization(data=data, ..., eps_mode="notebook")
+  results = opt.epsilon_constraint_sweep_notebook()
+  # hoặc: results = opt.epsilon_constraint_sweep(auto_reduce=False)
+
+  # Mode tight (production)
+  opt = Optimization(data=data, ..., eps_mode="tight", max_candidates=1200)
+  results = opt.epsilon_constraint_sweep(auto_reduce=True)
+
+Ma trận phủ dùng CSR sparse (tiết kiệm RAM); công thức ràng buộc phủ giữ nguyên
+dạng notebook: y_i ≤ Σ_{j: a_ij=1} x_j.
 """
 
 import os
@@ -70,10 +105,17 @@ class Optimization:
         """
         Parameters
         ----------
+        data, demand_set, candidate_set, roads_set, ward_polygon_wgs84
+            Dữ liệu MO-MCLP đã lắp từ GeoDataFrame / MCLP_Data.
+        n_points : int
+            Số điểm ε trên Pareto front.
+        time_limit_s, relative_gap, n_parallel, workers_per_solve
+            Tham số CP-SAT và song song.
         eps_mode : {"notebook", "tight"}
-            notebook — ε_max = sum(c) như ipynb (thử nghiệm, không reduction).
-            tight    — ε_max = sum(top P_max costs).
-        max_candidates : chỉ dùng khi auto_reduce=True.
+            notebook — ε_max = sum(c), không bắt buộc giảm |J| (đối chiếu ipynb).
+            tight    — ε_max = sum(top P_max costs); kết hợp auto_reduce khi cần.
+        max_candidates : int
+            Chỉ dùng khi auto_reduce=True (mode tight / production).
         """
         self.data = data
         self.demand_set = demand_set
@@ -212,7 +254,7 @@ class Optimization:
                 mdl.Add(y[int(i)] == 1)
 
         if data.P_max is not None:
-            mdl.Add(sum(x) <= int(data.P_max))
+            mdl.Add(sum(x) <= int(data.P_max)
 
         if data.budget is not None:
             c_int = np.round(data.c * self.SCALE).astype(np.int64)
@@ -222,7 +264,7 @@ class Optimization:
         return mdl, x, y
 
     # ------------------------------------------------------------------ #
-    # Greedy hint — notebook: 1 pass; tight: multi-start
+    # Greedy hint — notebook: 1 pass
     # ------------------------------------------------------------------ #
     def _greedy_solution_simple(self, eps: float) -> Optional[List[int]]:
         """Greedy 1 lần — giống tinh thần warm-start đơn giản của notebook."""
@@ -290,7 +332,6 @@ class Optimization:
 
     def _make_epsilons(self) -> np.ndarray:
         eps_min, eps_max = self._compute_epsilon_range()
-        # notebook: linspace đều
         return np.linspace(eps_min, eps_max, self.n_points).astype(float)
 
     # ------------------------------------------------------------------ #

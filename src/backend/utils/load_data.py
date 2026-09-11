@@ -1,10 +1,11 @@
 from dataclass.taxonomy_config import TaxonomyConfig
-from utils.parse_data import _parse_geometry
+from utils.parse_data import _parse_geometry , _parse_modes
 import geopandas as gpd 
 import pandas as pd 
+import numpy as np 
 
+config = TaxonomyConfig()
 def load_places(path : str , min_confidence : float = None) -> gpd.GeoDataFrame:
-  config = TaxonomyConfig()
   min_confidence = config.min_confidence if min_confidence is None else min_confidence
   if path.endswith('.parquet'):
     df = pd.read_parquet(path)

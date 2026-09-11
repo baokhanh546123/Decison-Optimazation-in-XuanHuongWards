@@ -2,6 +2,7 @@ from __future__ import annotations
 from shapely import wkb, wkt
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import Point
+import numpy as np 
 
 def _parse_geometry(val) -> BaseGeometry | None:
   if val is None or isinstance(val , float) and np.isnan(val):

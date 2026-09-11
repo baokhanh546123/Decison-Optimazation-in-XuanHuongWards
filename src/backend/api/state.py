@@ -1,18 +1,14 @@
 from __future__ import annotations
-
-import asyncio
-import dataclasses
-import time
 from typing import Optional
-
-import numpy as np
-import pandas as pd
-
 from dataclass.MCLP import MCLP_Data
 from dataclass.taxonomy_config import TaxonomyConfig, DEFAULT_TAXONOMY_CONFIG
 from core.coverage import build_coverage_matrix_sparse
 from core.taxonomy_apply import apply_demand_weights, apply_road_cost, road_eligibility_mask
-
+import numpy as np
+import pandas as pd
+import asyncio
+import dataclasses
+import time
 
 class PipelineState:
     def __init__(self, demand_raw: pd.DataFrame, candidate_raw: pd.DataFrame,

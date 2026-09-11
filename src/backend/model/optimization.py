@@ -8,7 +8,6 @@ from typing import Optional
 import numpy as np
 from ortools.sat.python import cp_model
 
-from dataclass.config import config
 from dataclass.MCLP import MCLP_Data
 from utils.load_data import clean_roads
 from utils.candidate_grid import *
@@ -66,7 +65,7 @@ class Optimization:
         self.re_solve_time_limit = re_solve_time_limit
         self.grid_spacing_m = grid_spacing_m
         self.street_spacing_m = street_spacing_m
-        self.CPU_COUNT = os.cpu_count() if CPU_COUNT is None else CPU_COUNT
+        self.CPU_COUNT = max(1,os.cpu_count()) if CPU_COUNT is None else CPU_COUNT
         self.utm_epsg = utm_epsg
 
         if self.n_parallel * self.workers_per_solve > self.CPU_COUNT:

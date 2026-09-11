@@ -1,20 +1,17 @@
 from __future__ import annotations
+from typing import Optional, Sequence
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 from scipy import sparse
-from typing import Optional, Sequence
-from dataclass.config import configs 
 import numpy as np
-
-config = configs()
-WGS84 , UTM48N = config.WGS84 , config.UTM48N
 
 def build_coverage_matrix_sparse(
     demand_gdf,
     candidate_gdf,
+    utm_epsg: int = 32648,
     max_radius_m: Optional[float] = None,
 ) -> sparse.csr_matrix:
-    to_utm = Transformer.from_crs(WGS84, f"EPSG:{UTM48N}", always_xy=True)
+    to_utm = Transformer.from_crs("EPSG:4326", f"EPSG:{utm_epsg}", always_xy=True)
     dx, dy = to_utm.transform(demand_gdf["lon"].to_numpy(), demand_gdf["lat"].to_numpy())
     cx, cy = to_utm.transform(candidate_gdf["lon"].to_numpy(), candidate_gdf["lat"].to_numpy())
 
@@ -45,19 +42,13 @@ def build_coverage_matrix_sparse(
     a_sparse.sum_duplicates()
     return a_sparse
 
-
 def coverage_distance_for(
     demand_gdf,
     candidate_gdf,
     chosen_candidate_idx: Sequence[int],
+    utm_epsg: int = 32648,
 ) -> np.ndarray:
-    """
-    Khoảng cách demand -> CHỈ các candidate đã chọn (vd sau khi solver trả nghiệm),
-    dùng để vẽ bán kính phục vụ / phân tích khoảng cách mà không phải giữ dist_ij
-    (n_i, n_j) dense trong suốt vòng đời chương trình.
-    Trả về mảng shape (n_i, len(chosen_candidate_idx)).
-    """
-    to_utm = Transformer.from_crs(WGS84, f"EPSG:{UTM48N}", always_xy=True)
+    to_utm = Transformer.from_crs("EPSG:4326", f"EPSG:{utm_epsg}", always_xy=True)
     dx, dy = to_utm.transform(demand_gdf["lon"].to_numpy(), demand_gdf["lat"].to_numpy())
     chosen = candidate_gdf.iloc[list(chosen_candidate_idx)]
     cx, cy = to_utm.transform(chosen["lon"].to_numpy(), chosen["lat"].to_numpy())

@@ -1,10 +1,7 @@
 from __future__ import annotations
-
 from typing import NamedTuple, Optional, Sequence
-
-import numpy as np
 from ortools.sat.python import cp_model
-
+import numpy as np
 
 class EpsilonTask(NamedTuple):
     template_proto_text: str
@@ -18,7 +15,6 @@ class EpsilonTask(NamedTuple):
     relative_gap: float
     hint_x: Optional[Sequence[int]]
     scale: int
-
 
 def solve_one_epsilon(task: EpsilonTask) -> Optional[dict]:
     """Chạy trong process con. Nhận text proto (parse_text_format, không dùng

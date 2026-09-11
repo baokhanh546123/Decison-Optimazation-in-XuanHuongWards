@@ -1,10 +1,7 @@
 from __future__ import annotations
-
+from dataclass.taxonomy_config import TaxonomyConfig
 import numpy as np
 import pandas as pd
-
-from dataclass.taxonomy_config import TaxonomyConfig
-
 
 def apply_demand_weights(demand_raw: pd.DataFrame, config: TaxonomyConfig) -> tuple[np.ndarray, np.ndarray]:
     """demand_raw cần cột 'taxonomy_root', 'confidence'.

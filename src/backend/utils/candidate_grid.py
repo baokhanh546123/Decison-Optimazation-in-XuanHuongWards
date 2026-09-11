@@ -1,19 +1,21 @@
-from dataclass.config import configs
 from pyproj import Transformer
+from dataclass.taxonomy_config import DEFAULT_TAXONOMY_CONFIG
 from scipy.spatial import cKDTree
+from utils.load_data import clean_roads
+from shapely.geometry import Point
 import geopandas as gpd
 import pandas as pd 
+import numpy as np 
 
 def generate_candidate_grid(
     ward_polygon_wgs84,
     spacing_m: float = 220.0,
+    utm_epsg: int = 32648,
 ) -> gpd.GeoDataFrame:
-    config = configs()
-    WGS84 , UTM48N = config.WGS84 , config.UTM48N
-    to_utm = Transformer.from_crs(WGS84, UTM48N, always_xy=True)
-    to_wgs = Transformer.from_crs(UTM48N, config.WGS84, always_xy=True)
+    to_utm = Transformer.from_crs("EPSG:4326", f"EPSG:{utm_epsg}", always_xy=True)
+    to_wgs = Transformer.from_crs(f"EPSG:{utm_epsg}", "EPSG:4326", always_xy=True)
 
-    poly_utm = gpd.GeoSeries([ward_polygon_wgs84], crs=WGS84).to_crs(epsg=UTM48N).iloc[0]
+    poly_utm = gpd.GeoSeries([ward_polygon_wgs84], crs="EPSG:4326").to_crs(epsg=utm_epsg).iloc[0]
     minx, miny, maxx, maxy = poly_utm.bounds
 
     xs = np.arange(minx, maxx, spacing_m)
@@ -28,7 +30,7 @@ def generate_candidate_grid(
     cand = gpd.GeoDataFrame(
         {"candidate_id": np.arange(len(lon))},
         geometry=gpd.points_from_xy(lon, lat),
-        crs=WGS84,
+        crs="EPSG:4326",
     )
     cand["lon"], cand["lat"] = lon, lat
     return cand
@@ -145,6 +147,7 @@ def merge_candidate_sets(
         combined, geometry=gpd.points_from_xy(combined["lon"], combined["lat"]), crs="EPSG:4326"
     )
 
+CLASS_COST_RANK = DEFAULT_TAXONOMY_CONFIG.class_cost_rank
 def derive_candidate_cost(candidate_gdf: gpd.GeoDataFrame) -> np.ndarray:
     """Bước 5: cost proxy c_j từ class hierarchy + độ rộng đường, thay np.ones() placeholder."""
     if "class" not in candidate_gdf.columns:
@@ -160,3 +163,27 @@ def derive_candidate_cost(candidate_gdf: gpd.GeoDataFrame) -> np.ndarray:
 
     cost = rank + width_norm
     return cost / cost.max()
+
+def build_candidate_set(roads, ward_polygon_wgs84, grid_spacing_m: float = 220.0,
+                         street_spacing_m: float = 80.0, utm_epsg: int = 32648):
+    grid_candidate = generate_candidate_grid(ward_polygon_wgs84, grid_spacing_m, utm_epsg)
+    if not roads:
+        return grid_candidate, np.ones(len(grid_candidate))
+
+    print(f"\n[OK] Grid candidate: {len(grid_candidate)} vị trí (spacing {grid_spacing_m}m)")
+
+    roads_raw = gpd.read_file(roads)
+    roads_clean = clean_roads(roads_raw)
+    n_eligible = int(roads_clean["is_candidate_eligible"].sum())
+    print(f"[OK] Roads: {len(roads_raw)} segment, {n_eligible} eligible sau clean_roads()")
+
+    street_cand = generate_street_candidates(
+        roads_clean, ward_polygon_wgs84, spacing_m=street_spacing_m, utm_epsg=utm_epsg,
+        start_id=len(grid_candidate),
+    )
+    print(f"[OK] Street candidate: {len(street_cand)} vị trí (spacing {street_spacing_m}m)")
+
+    merged = merge_candidate_sets(grid_candidate, street_cand, utm_epsg=utm_epsg)
+    cost = derive_candidate_cost(merged)
+    print(f"[OK] Candidate set J sau merge + dedup: {len(merged)}")
+    return merged, cost

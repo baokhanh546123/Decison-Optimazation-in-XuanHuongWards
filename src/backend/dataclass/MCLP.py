@@ -25,31 +25,37 @@ class MCLP_Data:
             self.a = sparse.csr_matrix(self.a)
         elif not isinstance(self.a, sparse.csr_matrix):
             self.a = self.a.tocsr()
-        self.p = np.asarray(self.p, dtype=np.float32)
-        self.c = np.asarray(self.c, dtype=np.float32)
+        # float64 để SCALE=1e6 không mất precision khi round (float32 dễ lệch)
+        self.p = np.asarray(self.p, dtype=np.float64)
+        self.c = np.asarray(self.c, dtype=np.float64)
         if self.must_cover is not None:
             self.must_cover = np.asarray(self.must_cover, dtype=np.int64)
 
     @property
     def n_i(self) -> int:
-        return self.a.shape[0]
+        return int(self.a.shape[0])
 
     @property
     def n_j(self) -> int:
-        return self.a.shape[1]
+        return int(self.a.shape[1])
 
     @property
     def coverage_lists(self) -> list:
-        """Danh sách candidate-index phủ từng demand i (cache 1 lần, dùng lại)."""
+        """Danh sách candidate-index phủ từng demand i.
+
+        Trả về list[np.ndarray] đã copy — tránh view vào buffer sparse bị
+        invalidate hoặc pickle không an toàn khi đưa vào process pool.
+        """
         if self._coverage_lists is None:
             indptr, indices = self.a.indptr, self.a.indices
             self._coverage_lists = [
-                indices[indptr[i]:indptr[i + 1]] for i in range(self.n_i)
+                np.array(indices[indptr[i]:indptr[i + 1]], dtype=np.int64, copy=True)
+                for i in range(self.n_i)
             ]
         return self._coverage_lists
 
     def invalidate_cache(self) -> None:
-        """Gọi lại nếu `a` bị gán/mutate trực tiếp sau khi khởi tạo (hiếm khi cần)."""
+        """Gọi lại nếu `a` bị gán/mutate trực tiếp sau khi khởi tạo."""
         self._coverage_lists = None
 
     def memory_report(self) -> dict:
@@ -74,24 +80,23 @@ class MCLP_Data:
         utm_epsg: int = 32648,
         **kwargs,
     ) -> "MCLP_Data":
+        """Lắp ráp MCLP_Data từ GeoDataFrame (sparse coverage).
+
+        Yêu cầu demand_gdf đã có cột 'p_i' và 'coverage_radius_m'
+        (do load_places + TaxonomyConfig).
         """
-        Yêu cầu demand_gdf đã có cột 'p_i' và 'coverage_radius_m' (do load_places()
-        trong utils/ tính sẵn từ TaxonomyConfig — xem dataclass/taxonomy_config.py),
-        và candidate_cost (nếu có) đã do derive_candidate_cost() trong
-        utils/candidate_grid.py tính sẵn từ cùng config đó. Hàm này KHÔNG tự tính
-        lại taxonomy weight — chỉ lắp ráp thành MCLP_Data.
-        """
-        from core.coverage import build_coverage_matrix_sparse  # import cục bộ, tránh vòng lặp import
+        from core.coverage import build_coverage_matrix_sparse
 
         a_sparse = build_coverage_matrix_sparse(
             demand_gdf, candidate_gdf, utm_epsg=utm_epsg, max_radius_m=max_radius_m
         )
-        p = demand_gdf["p_i"].to_numpy(dtype=np.float32)
+        p = demand_gdf["p_i"].to_numpy(dtype=np.float64)
         c = (
             candidate_cost if candidate_cost is not None else np.ones(len(candidate_gdf))
-        ).astype(np.float32)
+        )
+        c = np.asarray(c, dtype=np.float64)
         return cls(p=p, a=a_sparse, c=c, **kwargs)
 
 
-# Alias giữ tương thích ngược cho code cũ import MCLPData (không có dấu gạch dưới)
+# Alias tương thích ngược
 MCLPData = MCLP_Data

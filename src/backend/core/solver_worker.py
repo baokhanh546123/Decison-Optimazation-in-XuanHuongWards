@@ -26,38 +26,32 @@ def _configure_solver(
     num_search_workers: int,
     relative_gap: float,
 ) -> None:
-    """Bộ tham số CP-SAT hướng tới gap nhỏ trên bài binary covering."""
+    """Tham số CP-SAT bám notebook gốc (đã cho gap ổn) + presolve/LP vừa đủ.
+
+    Tránh optimize_with_core / probing_level cao — trên MCLP binary lớn chúng
+    đôi khi làm bound lỏng và gap báo cáo rất cao (100–200%).
+    """
     solver.parameters.max_time_in_seconds = float(time_limit_s)
-    solver.parameters.num_search_workers = int(num_search_workers)
+    solver.parameters.num_search_workers = int(max(1, num_search_workers))
     solver.parameters.relative_gap_limit = float(relative_gap)
 
-    # Presolve + LP relaxation mạnh
+    # Giống tinh thần notebook: đơn giản, ổn định
     solver.parameters.cp_model_presolve = True
     solver.parameters.linearization_level = 2
-    solver.parameters.cp_model_probing_level = 2
-    solver.parameters.symmetry_level = 2
-
-    # Ưu tiên chứng minh bound hơn tìm nghiệm mới khi đã có solution tốt
-    solver.parameters.optimize_with_core = True
-    solver.parameters.use_optional_variables = False
-
-    # Giảm nhiễu log
+    # Không bật probing/symmetry/core aggressive — giữ bound tin cậy
     solver.parameters.log_search_progress = False
 
 
 def solve_one_epsilon(task: EpsilonTask) -> Optional[dict]:
-    """Chạy trong process con.
-
-    Nhận text proto (parse_text_format — tương thích OR-Tools 9.x đã verify).
-    Trả về dict kết quả hoặc None nếu không tìm được nghiệm khả thi.
-    """
+    """Giải một điểm ε trong process con (proto text format, OR-Tools 9.x)."""
     mdl = cp_model.CpModel()
     mdl.Proto().parse_text_format(task.template_proto_text)
 
+    # Thứ tự biến trong template: x_0..x_{n_j-1}, rồi y_0..y_{n_i-1}
     x = [mdl.GetBoolVarFromProtoIndex(j) for j in range(task.n_j)]
     y = [mdl.GetBoolVarFromProtoIndex(task.n_j + i) for i in range(task.n_i)]
 
-    scale = task.scale
+    scale = int(task.scale)
     c_arr = np.asarray(task.c, dtype=np.float64)
     p_arr = np.asarray(task.p, dtype=np.float64)
 
@@ -65,13 +59,12 @@ def solve_one_epsilon(task: EpsilonTask) -> Optional[dict]:
     p_int = np.round(p_arr * scale).astype(np.int64)
     eps_int = int(round(float(task.eps) * scale))
 
-    # Ràng buộc ngân sách ε
+    # Ràng buộc ngân sách ε (giống notebook)
     mdl.Add(sum(int(c_int[j]) * x[j] for j in range(task.n_j)) <= eps_int)
 
-    # Mục tiêu: max covering profit
+    # Max covering profit
     mdl.Maximize(sum(int(p_int[i]) * y[i] for i in range(task.n_i)))
 
-    # Warm-start hint (nếu có)
     if task.hint_x is not None and len(task.hint_x) == task.n_j:
         for j in range(task.n_j):
             mdl.AddHint(x[j], int(task.hint_x[j]))
@@ -96,7 +89,6 @@ def solve_one_epsilon(task: EpsilonTask) -> Optional[dict]:
 
     obj = float(solver.ObjectiveValue())
     bound = float(solver.BestObjectiveBound())
-    # Gap tương đối chuẩn MIP: |bound - obj| / max(|obj|, 1)
     denom = max(abs(obj), 1.0)
     gap_pct = abs(bound - obj) / denom * 100.0
 

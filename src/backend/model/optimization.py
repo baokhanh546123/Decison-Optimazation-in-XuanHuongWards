@@ -96,7 +96,7 @@ class Optimization:
         grid_spacing_m: float = 220.0,
         street_spacing_m: float = 80.0,
         max_radius_m: Optional[float] = None,
-        SCALE: int = 10 ** 6,
+        SCALE: int = 10 ** 7,
         CPU_COUNT: Optional[int] = None,
         utm_epsg: int = 32648,
         max_candidates: int = 1200,
@@ -135,7 +135,7 @@ class Optimization:
         self.re_solve_time_limit = re_solve_time_limit
         self.grid_spacing_m = grid_spacing_m
         self.street_spacing_m = street_spacing_m
-        self.CPU_COUNT = max(1, os.cpu_count() or 1) if CPU_COUNT is None else CPU_COUNT
+        self.CPU_COUNT = max(1, os.cpu_count()) if CPU_COUNT is None else CPU_COUNT
         self.utm_epsg = utm_epsg
         self.max_candidates = max_candidates
         self.eps_mode = eps_mode if eps_mode in ("notebook", "tight") else "notebook"
@@ -446,7 +446,7 @@ class Optimization:
         best_hint: Optional[Sequence[int]] = None,
     ) -> None:
         data = self.data
-        gap_threshold = 20.0
+        gap_threshold = 15.0
         flagged_idx = [
             idx for idx, r in enumerate(results)
             if r["flagged_non_monotonic"] or r["optimality_gap_pct"] > gap_threshold

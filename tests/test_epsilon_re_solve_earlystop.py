@@ -60,6 +60,32 @@ def tiny_mclp() -> MCLP_Data:
     return MCLP_Data(p=p, a=a, c=c, P_max=2)
 
 
+class _InlineExecutor:
+    """Executor giả chạy tuần tự trong cùng process (không fork subprocess thật).
+
+    Lý do cần: unittest.mock.patch("model.optimization.solve_one_epsilon", ...)
+    tạo ra một MagicMock. Khi sweep thật chạy qua ProcessPoolExecutor, OR-Tools/
+    concurrent.futures phải pickle callable đó để gửi sang worker process —
+    MagicMock không pickle được ổn định giữa các process
+    (PicklingError: "Can't pickle <class 'unittest.mock.MagicMock'>: it's not
+    the same object as unittest.mock.MagicMock"). Logic cần test ở đây
+    (plateau counting / early-stop) là code điều khiển luồng thuần Python phía
+    process cha, không phải bản thân CP-SAT solve, nên chạy tuần tự trong cùng
+    process là đủ và tránh được lỗi pickling không liên quan tới thứ đang test.
+    """
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def map(self, fn, iterable):
+        return [fn(item) for item in iterable]
+
+
 def _fake_result(eps: float, f1: float, gap: float = 1.0, n_j: int = 4) -> dict:
     return {
         "epsilon": float(eps),
@@ -139,7 +165,8 @@ def test_sweep_early_stop_on_f1_plateau(tiny_mclp):
     def fake_solve(task):
         return next(it)
 
-    with patch("model.optimization.solve_one_epsilon", side_effect=fake_solve):
+    with patch("model.optimization.solve_one_epsilon", side_effect=fake_solve), \
+         patch("model.optimization.ProcessPoolExecutor", _InlineExecutor):
         results = opt.epsilon_constraint_sweep(auto_reduce=False)
 
     # Không giải hết 8 điểm
@@ -164,7 +191,8 @@ def test_sweep_no_early_stop_when_disabled(tiny_mclp):
     seq = [_fake_result(float(i), 3.0) for i in range(5)]
     it = iter(seq)
 
-    with patch("model.optimization.solve_one_epsilon", side_effect=lambda t: next(it)):
+    with patch("model.optimization.solve_one_epsilon", side_effect=lambda t: next(it)), \
+         patch("model.optimization.ProcessPoolExecutor", _InlineExecutor):
         results = opt.epsilon_constraint_sweep(auto_reduce=False)
 
     assert len(results) == 5

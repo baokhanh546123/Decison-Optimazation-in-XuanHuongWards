@@ -1,3 +1,14 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.0.0
+
+# --- optimization / geospatial stack (import trực tiếp trong core/, dataclass/,
+# model/, utils/ — thiếu ở đây thì `pip install -r requirements.txt` không đủ
+# để chạy backend, chỉ đủ để chạy riêng api/main.py stub) ---
+ortools==9.15.6755
+numpy
+pandas
+scipy
+geopandas
+shapely
+pyproj

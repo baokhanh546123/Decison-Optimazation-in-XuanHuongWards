@@ -23,8 +23,9 @@ demand_gdf = load_places(f'{data}/Xuanhuongward/Xuan Huong Wards_featured.geojso
 #print('Demand Set')
 #print(demand_gdf)
 
+roads_path = f"{data}/Xuanhuongward/Xuan Huong Wards_roads.geojson"
 candidate_gdf, candidate_cost = build_candidate_set(
-    roads='/home/trank/python/DecisionOptimazation/data/Xuanhuongward/Xuan Huong Wards_roads.geojson',
+    roads=roads_path,
     ward_polygon_wgs84=wards_polygon,
     grid_spacing_m=220,
     street_spacing_m=80,
@@ -39,7 +40,7 @@ print(f"\n[OK] Coverage matrix a_ij shape: {data.a.shape}, "
       f"trung bình mỗi POI được phủ bởi {data.a.sum(axis=1).mean():.1f} candidate")
 
 opt = Optimization(data = data , demand_set = demand_gdf , 
-candidate_set = candidate_gdf , roads_set = '/home/trank/python/DecisionOptimazation/data/Xuanhuongward/Xuan Huong Wards_roads.geojson',
+candidate_set = candidate_gdf , roads_set = roads_path,
 ward_polygon_wgs84=wards_polygon,workers_per_solve=4)
 result = opt.epsilon_constraint_sweep()
 for r in result:

@@ -1,3 +1,1 @@
-from __future__ import annotations
-
-# SEE LOCAL FILE - loading via workaround
+RESTORED_VIA_LOCAL_OPT_SLIM

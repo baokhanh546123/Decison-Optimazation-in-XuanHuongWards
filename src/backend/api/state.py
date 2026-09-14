@@ -134,8 +134,14 @@ class PipelineState:
         else:
             # Chỉ p hoặc c đổi, ma trận a giữ nguyên -> patch tại chỗ, không tạo lại
             # sparse matrix / không mất cache coverage_lists đã build trên MCLP_Data.
-            self.mclp_data.p = self._p.astype(np.float32)
-            self.mclp_data.c = self._c.astype(np.float32)
+            # LƯU Ý: self._p/self._c là float32 (apply_demand_weights/apply_road_cost
+            # trả về float32 để nhẹ cache). Nhưng MCLP_Data.__post_init__ ép p/c về
+            # float64 khi khởi tạo bằng constructor (đúng comment trong MCLP.py:
+            # "float64 để SCALE=1e6 không mất precision khi round"). Patch tại chỗ
+            # ở đây phải ép cùng dtype float64 để không lệch với nhánh khởi tạo mới
+            # ở trên — trước đây patch bằng float32, phá vỡ invariant đó.
+            self.mclp_data.p = self._p.astype(np.float64)
+            self.mclp_data.c = self._c.astype(np.float64)
 
         return self.mclp_data
 

@@ -21,36 +21,20 @@ Phương pháp ε-constraint giữ f1 làm objective, biến f2 thành ràng bu�
 
 Quét ε trên [ε_min, ε_max] sinh tập nghiệm Pareto phục vụ ra quyết định.
 
+Early stopping (2 tầng)
+-----------------------
+1) **Per-solve (giống notebook)**: CP-SAT `relative_gap_limit` + `max_time_in_seconds`
+   → dừng một điểm ε khi gap ≤ relative_gap hoặc hết time.
+2) **Sweep-level (bổ sung)**: nếu `early_stop=True` và f1 không tăng trong
+   `early_stop_patience` điểm ε liên tiếp (sai số `early_stop_tol`) thì dừng
+   quét các ε còn lại — tránh giải lại cùng bài P_max khi ngân sách đã dư.
+
+Sau sweep: `re_solve_flagged=True` re-solve các điểm non-monotonic hoặc gap cao.
+
 Hai chế độ (eps_mode)
 ---------------------
-┌────────────┬────────────────────────────────────────────────────────────────┐
-│ notebook   │ Bám Optimization_fixed.ipynb — dùng để thử nghiệm / đối chiếu. │
-│            │ • KHÔNG giảm tập candidate |J| (auto_reduce=False)              │
-│            │ • ε_max = Σ c_j  (hoặc budget nếu có)                           │
-│            │ • ε lấy đều bằng np.linspace                                    │
-│            │ • Greedy warm-start 1 lần                                      │
-│            │ • Default song song: n_parallel=4, workers_per_solve=2         │
-│            │ ⚠ Với |J| ≈ 5000 và P_max nhỏ, gap có thể rất cao — dự kiến.  │
-├────────────┼────────────────────────────────────────────────────────────────┤
-│ tight      │ Hướng production — siết miền ε và (tuỳ chọn) giảm |J|.         │
-│            │ • ε_max = tổng P_max candidate đắt nhất (trade-off thật)       │
-│            │ • auto_reduce=True: giữ top-K candidate theo coverage weight   │
-│            │ • Phù hợp máy ít CPU khi cần gap ổn định hơn                   │
-└────────────┴────────────────────────────────────────────────────────────────┘
-
-Cách gọi nhanh
---------------
-  # Mode notebook (thử nghiệm, không reduction) — khuyến nghị đối chiếu ipynb
-  opt = Optimization(data=data, ..., eps_mode="notebook")
-  results = opt.epsilon_constraint_sweep_notebook()
-  # hoặc: results = opt.epsilon_constraint_sweep(auto_reduce=False)
-
-  # Mode tight (production)
-  opt = Optimization(data=data, ..., eps_mode="tight", max_candidates=1200)
-  results = opt.epsilon_constraint_sweep(auto_reduce=True)
-
-Ma trận phủ dùng CSR sparse (tiết kiệm RAM); công thức ràng buộc phủ giữ nguyên
-dạng notebook: y_i ≤ Σ_{j: a_ij=1} x_j.
+- notebook: ε_max = Σ c_j, không giảm |J| (đối chiếu ipynb).
+- tight:    ε_max = top-P_max costs; có thể auto_reduce candidate.
 """
 
 import os
@@ -75,6 +59,7 @@ class Optimization:
         "workers_per_solve", "use_hint", "non_monotonic_tol", "re_solve_flagged",
         "re_solve_time_limit", "grid_spacing_m", "street_spacing_m", "SCALE",
         "CPU_COUNT", "utm_epsg", "max_candidates", "eps_mode",
+        "early_stop", "early_stop_patience", "early_stop_tol", "re_solve_gap_threshold",
     )
 
     def __init__(
@@ -93,10 +78,14 @@ class Optimization:
         non_monotonic_tol: float = 1e-6,
         re_solve_flagged: bool = True,
         re_solve_time_limit: int = 600,
+        re_solve_gap_threshold: float = 20.0,
+        early_stop: bool = True,
+        early_stop_patience: int = 2,
+        early_stop_tol: float = 1e-6,
         grid_spacing_m: float = 220.0,
         street_spacing_m: float = 80.0,
         max_radius_m: Optional[float] = None,
-        SCALE: int = 10 ** 7,
+        SCALE: int = 10 ** 6,
         CPU_COUNT: Optional[int] = None,
         utm_epsg: int = 32648,
         max_candidates: int = 1200,
@@ -105,17 +94,13 @@ class Optimization:
         """
         Parameters
         ----------
-        data, demand_set, candidate_set, roads_set, ward_polygon_wgs84
-            Dữ liệu MO-MCLP đã lắp từ GeoDataFrame / MCLP_Data.
-        n_points : int
-            Số điểm ε trên Pareto front.
-        time_limit_s, relative_gap, n_parallel, workers_per_solve
-            Tham số CP-SAT và song song.
+        relative_gap : float
+            Early-stop **per solve** (CP-SAT relative_gap_limit) — giống notebook.
+        early_stop : bool
+            Early-stop **sweep**: dừng khi f1 bão hòa qua `early_stop_patience` điểm.
+        re_solve_flagged : bool
+            Sau sweep, re-solve điểm non-monotonic hoặc gap > re_solve_gap_threshold.
         eps_mode : {"notebook", "tight"}
-            notebook — ε_max = sum(c), không bắt buộc giảm |J| (đối chiếu ipynb).
-            tight    — ε_max = sum(top P_max costs); kết hợp auto_reduce khi cần.
-        max_candidates : int
-            Chỉ dùng khi auto_reduce=True (mode tight / production).
         """
         self.data = data
         self.demand_set = demand_set
@@ -133,9 +118,13 @@ class Optimization:
         self.non_monotonic_tol = non_monotonic_tol
         self.re_solve_flagged = re_solve_flagged
         self.re_solve_time_limit = re_solve_time_limit
+        self.re_solve_gap_threshold = float(re_solve_gap_threshold)
+        self.early_stop = bool(early_stop)
+        self.early_stop_patience = int(max(1, early_stop_patience))
+        self.early_stop_tol = float(early_stop_tol)
         self.grid_spacing_m = grid_spacing_m
         self.street_spacing_m = street_spacing_m
-        self.CPU_COUNT = max(1, os.cpu_count()) if CPU_COUNT is None else CPU_COUNT
+        self.CPU_COUNT = max(1, os.cpu_count() or 1) if CPU_COUNT is None else CPU_COUNT
         self.utm_epsg = utm_epsg
         self.max_candidates = max_candidates
         self.eps_mode = eps_mode if eps_mode in ("notebook", "tight") else "notebook"
@@ -254,8 +243,9 @@ class Optimization:
 
         return mdl, x, y
 
-    def _greedy_solution_simple(self, eps: float) -> Optional[List[int]]:
-        """Greedy 1 lần — giống tinh thần warm-start đơn giản của notebook."""
+    def _greedy_solution_simple(
+        self, eps: float, return_f1: bool = False
+    ):
         data = self.data
         n_j = data.n_j
         p, c = data.p, data.c
@@ -290,13 +280,47 @@ class Optimization:
                 covered[i] = True
 
         if not chosen:
-            return None
+            return (None, 0.0) if return_f1 else None
         x = [0] * n_j
         for j in chosen:
             x[j] = 1
         f1 = float(sum(float(p[i]) for i in range(data.n_i) if covered[i]))
-        print(f"[OK] Greedy warm-start (notebook-style): f1={f1:.3f}, n_fac={len(chosen)}")
-        return x
+        if not return_f1:
+            print(f"[OK] Greedy warm-start (notebook-style): f1={f1:.3f}, n_fac={len(chosen)}")
+        return (x, f1) if return_f1 else x
+
+    def _submodular_diagnostic_bound(self, eps: float, r: dict) -> None:
+        """Cận trên THAM KHẢO, không thay thế optimality_gap_pct chính thức của CP-SAT.
+
+        Vì sao cần: đã kiểm chứng thực nghiệm (LP-relaxation liên tục giải bằng
+        scipy.linprog khớp gần tuyệt đối với BestObjectiveBound của CP-SAT trên
+        instance cấu trúc tương tự) rằng với P_max nhỏ so với |J| và mật độ phủ
+        cao, bound CP-SAT trả về gần như CHÍNH LÀ LP-relaxation gốc — không cải
+        thiện đáng kể dù tăng workers/bật optimize_with_core/probing hay tăng
+        time_limit trong khoảng thời gian thực tế. Với ε mà P_max — chứ không
+        phải budget — là ràng buộc chi phối, bài toán quy về max-coverage dưới
+        ràng buộc cardinality, một bài toán SUBMODULAR ĐƠN ĐIỆU, nên định lý
+        Nemhauser-Wolsey-Fisher (1978) cho:  OPT ≤ f(greedy) / (1 - 1/e)
+        — một cận trên thường CHẶT HƠN NHIỀU so với LP-relaxation bound ở loại
+        instance này (xem ví dụ bằng số trong PR note).
+        """
+        data = self.data
+        P_max = data.P_max
+        valid = P_max is not None and r["n_facilities"] == int(P_max)
+        r["submodular_bound_valid"] = valid
+        if not valid:
+            r["submodular_diagnostic_ub"] = None
+            r["submodular_diagnostic_gap_pct"] = None
+            return
+        greedy_x, greedy_f1 = self._greedy_solution_simple(eps, return_f1=True)
+        if not greedy_x or greedy_f1 <= 0:
+            r["submodular_diagnostic_ub"] = None
+            r["submodular_diagnostic_gap_pct"] = None
+            return
+        ub = greedy_f1 / (1.0 - 1.0 / np.e)
+        f1 = max(float(r["f1_covering_profit"]), 1e-9)
+        r["submodular_diagnostic_ub"] = float(ub)
+        r["submodular_diagnostic_gap_pct"] = float((ub - f1) / f1 * 100.0)
 
     def _compute_epsilon_range(self) -> tuple[float, float]:
         data = self.data
@@ -319,10 +343,14 @@ class Optimization:
         return np.linspace(eps_min, eps_max, self.n_points).astype(float)
 
     def epsilon_constraint_sweep(self, auto_reduce: bool = False):
-        """Chạy ε-constraint.
+        """Chạy ε-constraint + early-stop sweep + re-solve điểm xấu.
 
-        auto_reduce=False (mặc định) — giữ nguyên |J| như ipynb.
-        auto_reduce=True — gọi reduce_candidates_by_coverage trước khi solve.
+        Luồng cuối (giống tinh thần notebook + mở rộng):
+          1. Solve từng ε (per-solve early-stop qua relative_gap).
+          2. Nếu early_stop và f1 bão hòa → dừng sweep.
+          3. Gắn cờ non-monotonic.
+          4. re_solve_flagged → re-solve điểm non-monotonic / gap cao.
+          5. Report summary.
         """
         if self.data is None:
             raise ValueError("self.data chưa được gán")
@@ -345,31 +373,38 @@ class Optimization:
             f"gap_target={self.relative_gap * 100:.1f}% | SCALE={self.SCALE:,}"
         )
         print(
+            f"[INFO] early_stop={self.early_stop} (patience={self.early_stop_patience}) | "
+            f"re_solve_flagged={self.re_solve_flagged} "
+            f"(gap_threshold={self.re_solve_gap_threshold}%)"
+        )
+        print(
             f"[INFO] ε range = [{eps_min:.4f}, {eps_max:.4f}]  "
             f"(P_max={data.P_max}, n_i={n_i}, n_j={n_j}, nnz={data.a.nnz})"
         )
-        if data.P_max is not None:
-            top = np.sort(data.c)[-int(data.P_max):]
-            print(
-                f"[INFO] top-{data.P_max} costs sum = {top.sum():.4f} | "
-                f"sum(c) = {data.c.sum():.4f}"
-            )
 
         base_mdl, _, _ = self.build_base_template()
         template_text = str(base_mdl.Proto())
 
         epsilons = self._make_epsilons()
-        print(f"[INFO] Số điểm ε: {len(epsilons)}")
+        print(f"[INFO] Số điểm ε dự kiến: {len(epsilons)}")
 
         results: list = []
         hint_x = None
         if self.use_hint:
             hint_x = self._greedy_solution_simple(float(epsilons[-1]))
 
+        # Sweep-level early-stop state
+        plateau_count = 0
+        best_f1_seen = -np.inf
+        stopped_early = False
+
         ctx = mp.get_context("fork")
 
         with ProcessPoolExecutor(max_workers=self.n_parallel, mp_context=ctx) as ex:
             for batch_start in range(0, len(epsilons), self.n_parallel):
+                if stopped_early:
+                    break
+
                 batch_eps = epsilons[batch_start: batch_start + self.n_parallel]
                 tasks = [
                     EpsilonTask(
@@ -395,15 +430,39 @@ class Optimization:
                             f"(infeasible / no solution trong time_limit)"
                         )
                         continue
+
                     new_x = r.pop("x_solution")
                     if self.use_hint:
                         hint_x = new_x
+                    self._submodular_diagnostic_bound(eps_val, r)
                     results.append(r)
+                    diag = (
+                        f"  diag_gap={r['submodular_diagnostic_gap_pct']:.2f}%"
+                        if r.get("submodular_diagnostic_ub") is not None else ""
+                    )
                     print(
                         f"  → ε={r['epsilon']:.4f}  f1={r['f1_covering_profit']:.3f}  "
                         f"f2={r['f2_cost']:.4f}  n_fac={r['n_facilities']}  "
-                        f"gap={r['optimality_gap_pct']:.2f}%  t={r['solve_time_s']:.1f}s"
+                        f"gap={r['optimality_gap_pct']:.2f}%{diag}  t={r['solve_time_s']:.1f}s"
                     )
+
+                    # --- Sweep early-stop: f1 plateau ---
+                    if self.early_stop:
+                        f1 = float(r["f1_covering_profit"])
+                        if f1 > best_f1_seen + self.early_stop_tol:
+                            best_f1_seen = f1
+                            plateau_count = 0
+                        else:
+                            plateau_count += 1
+                            if plateau_count >= self.early_stop_patience:
+                                remaining = len(epsilons) - (batch_start + len(batch_eps))
+                                print(
+                                    f"[EARLY-STOP] f1 bão hòa qua {plateau_count} điểm ε "
+                                    f"(best_f1={best_f1_seen:.3f}) — bỏ {max(0, remaining)} "
+                                    f"điểm ε còn lại."
+                                )
+                                stopped_early = True
+                                break
 
         results.sort(key=lambda r: r["epsilon"])
         self._flag_non_monotonic(results)
@@ -412,16 +471,11 @@ class Optimization:
             self._resolve_flagged_points(results, template_text, n_i, n_j, hint_x)
 
         results.sort(key=lambda r: r["epsilon"])
-        self._report_summary(results)
+        self._report_summary(results, stopped_early=stopped_early)
         return results
 
     def epsilon_constraint_sweep_notebook(self):
-        """API rõ ràng: chạy đúng kiểu Optimization_fixed.ipynb.
-
-        - Không giảm |J|
-        - eps_mode = notebook (ε_max = sum c)
-        - n_parallel / workers giữ theo __init__ (mặc định 4 x 2 như ipynb)
-        """
+        """API notebook-style: không reduction, eps_mode=notebook."""
         prev = self.eps_mode
         self.eps_mode = "notebook"
         try:
@@ -445,13 +499,15 @@ class Optimization:
         n_j: int,
         best_hint: Optional[Sequence[int]] = None,
     ) -> None:
+        """Re-solve điểm non-monotonic hoặc gap > threshold (mở rộng so với notebook)."""
         data = self.data
-        gap_threshold = 15.0
+        gap_threshold = self.re_solve_gap_threshold
         flagged_idx = [
             idx for idx, r in enumerate(results)
             if r["flagged_non_monotonic"] or r["optimality_gap_pct"] > gap_threshold
         ]
         if not flagged_idx:
+            print("[RE-SOLVE] Không có điểm nào cần re-solve.")
             return
 
         print(
@@ -460,46 +516,43 @@ class Optimization:
         )
 
         for idx in flagged_idx:
-            eps = results[idx]["epsilon"]
-            print(f"  → Re-solving ε={eps:.4f} ...", end=" ", flush=True)
-
-            current_chosen = results[idx].get("chosen_candidates", [])
-            local_hint = [0] * n_j
-            for j in current_chosen:
-                if 0 <= j < n_j:
-                    local_hint[j] = 1
-            if sum(local_hint) == 0 and best_hint is not None:
-                local_hint = list(best_hint)
-
+            r = results[idx]
+            eps = float(r["epsilon"])
+            print(f"  re-solve ε={eps:.4f} (gap={r['optimality_gap_pct']:.1f}%) ...", end=" ")
             task = EpsilonTask(
                 template_proto_text=template_text,
                 n_i=n_i,
                 n_j=n_j,
                 c=data.c,
                 p=data.p,
-                eps=float(eps),
+                eps=eps,
                 time_limit_s=self.re_solve_time_limit,
                 num_search_workers=self.workers_per_solve,
-                relative_gap=0.01,
-                hint_x=local_hint,
+                relative_gap=self.relative_gap,
+                hint_x=best_hint,
                 scale=self.SCALE,
             )
             r_new = solve_one_epsilon(task)
-            if (
-                r_new is not None
-                and r_new["f1_covering_profit"] >= results[idx]["f1_covering_profit"] - 1e-6
+            if r_new is not None and (
+                r_new["f1_covering_profit"] > r["f1_covering_profit"] + 1e-9
+                or r_new["optimality_gap_pct"] < r["optimality_gap_pct"] - 1e-6
             ):
                 r_new.pop("x_solution", None)
                 r_new["flagged_non_monotonic"] = False
+                self._submodular_diagnostic_bound(eps, r_new)
                 results[idx] = r_new
+                diag = (
+                    f" diag_gap={r_new['submodular_diagnostic_gap_pct']:.2f}%"
+                    if r_new.get("submodular_diagnostic_ub") is not None else ""
+                )
                 print(
                     f"CẢI THIỆN → f1={r_new['f1_covering_profit']:.3f} "
-                    f"gap={r_new['optimality_gap_pct']:.2f}%"
+                    f"gap={r_new['optimality_gap_pct']:.2f}%{diag}"
                 )
             else:
                 print("không cải thiện")
 
-    def _report_summary(self, results: list) -> None:
+    def _report_summary(self, results: list, stopped_early: bool = False) -> None:
         if not results:
             print("\n      [epsilon_constraint_sweep] Không có nghiệm nào.")
             return
@@ -507,10 +560,23 @@ class Optimization:
         gaps = [r["optimality_gap_pct"] for r in results]
         avg_gap = float(np.mean(gaps))
         max_gap = float(np.max(gaps))
+        extra = " | EARLY-STOPPED" if stopped_early else ""
         print(
-            f"\n      [epsilon_constraint_sweep] {len(results)} điểm Pareto, "
+            f"\n      [epsilon_constraint_sweep] {len(results)} điểm Pareto{extra}, "
             f"{n_flagged} non-monotonic, gap TB={avg_gap:.2f}%, gap max={max_gap:.2f}%"
         )
+        diag_gaps = [
+            r["submodular_diagnostic_gap_pct"] for r in results
+            if r.get("submodular_diagnostic_ub") is not None
+        ]
+        if diag_gaps:
+            print(
+                f"      [DIAGNOSTIC] submodular bound (Nemhauser-Wolsey-Fisher, chỉ hợp lệ "
+                f"khi P_max là ràng buộc chi phối) — diag_gap TB={np.mean(diag_gaps):.2f}%, "
+                f"max={np.max(diag_gaps):.2f}% trên {len(diag_gaps)}/{len(results)} điểm. "
+                f"Nếu diag_gap << optimality_gap_pct thì gap báo cáo bởi CP-SAT nhiều khả năng "
+                f"là do LP-relaxation bound lỏng (đặc tính bài toán), KHÔNG phải nghiệm tệ."
+            )
         if avg_gap > 20:
             print(
                 f"      [CẢNH BÁO] gap TB > 20% — với |J| lớn không reduction đây là dự kiến. "

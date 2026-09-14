@@ -305,3 +305,96 @@ def test_real_solve_one_epsilon_tiny(tiny_mclp):
         assert "optimality_gap_pct" in r
         assert "flagged_non_monotonic" in r
         assert r["n_facilities"] <= 2
+
+
+# ---------------------------------------------------------------------------
+# 6) Submodular diagnostic bound
+# ---------------------------------------------------------------------------
+def test_submodular_diagnostic_bound_matches_formula_and_gating(tiny_mclp):
+    """diag bound = greedy_f1/(1-1/e); chỉ valid khi n_facilities == P_max."""
+    opt = Optimization(data=tiny_mclp, n_points=4)
+
+    r_full = {"n_facilities": 2, "f1_covering_profit": 9.0}
+    eps_generous = 100.0
+    opt._submodular_diagnostic_bound(eps_generous, r_full)
+    assert r_full["submodular_bound_valid"] is True
+    assert r_full["submodular_diagnostic_ub"] is not None
+    greedy_x, greedy_f1 = opt._greedy_solution_simple(eps_generous, return_f1=True)
+    expected_ub = greedy_f1 / (1 - 1 / np.e)
+    assert r_full["submodular_diagnostic_ub"] == pytest.approx(expected_ub, rel=1e-9)
+    expected_gap = (expected_ub - r_full["f1_covering_profit"]) / r_full["f1_covering_profit"] * 100.0
+    assert r_full["submodular_diagnostic_gap_pct"] == pytest.approx(expected_gap, rel=1e-9)
+
+    r_partial = {"n_facilities": 1, "f1_covering_profit": 5.0}
+    opt._submodular_diagnostic_bound(eps_generous, r_partial)
+    assert r_partial["submodular_bound_valid"] is False
+    assert r_partial["submodular_diagnostic_ub"] is None
+    assert r_partial["submodular_diagnostic_gap_pct"] is None
+
+
+# ---------------------------------------------------------------------------
+# 7) Geographic / Spatial Decomposition
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def tiny_mclp_with_coords(tiny_mclp):
+    """Gắn candidate_set giả lập tọa độ để test geographic mode."""
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    coords = [(108.44, 11.94), (108.45, 11.94), (108.44, 11.95), (108.46, 11.96)]
+    gdf = gpd.GeoDataFrame(
+        {"candidate_id": list(range(4)), "lon": [c[0] for c in coords], "lat": [c[1] for c in coords]},
+        geometry=[Point(c[0], c[1]) for c in coords],
+        crs="EPSG:4326",
+    )
+    return tiny_mclp, gdf
+
+
+def test_kmeans_numpy_labels_cover_all_points():
+    from model.geo_decomp import kmeans_numpy
+    xy = np.array([[0.0, 0.0], [0.1, 0.0], [10.0, 10.0], [10.1, 10.0]], dtype=np.float64)
+    labels = kmeans_numpy(xy, k=2, seed=0)
+    assert labels.shape == (4,)
+    assert set(labels.tolist()) <= {0, 1}
+    assert labels[0] == labels[1]
+    assert labels[2] == labels[3]
+    assert labels[0] != labels[2]
+
+
+def test_pam_numpy_labels_cover_all_points():
+    from model.geo_decomp import pam_numpy
+    xy = np.array([[0.0, 0.0], [0.1, 0.0], [10.0, 10.0], [10.1, 10.0]], dtype=np.float64)
+    labels = pam_numpy(xy, k=2, seed=0)
+    assert labels.shape == (4,)
+    assert set(labels.tolist()) <= {0, 1}
+
+
+def test_reduce_candidates_geographic_reduces_and_preserves_shape(tiny_mclp_with_coords):
+    data, gdf = tiny_mclp_with_coords
+    opt = Optimization(
+        data=data,
+        candidate_set=gdf,
+        eps_mode="geographic",
+        n_geo_clusters=2,
+        geo_cluster_method="kmeans",
+        geo_max_per_cluster=1,
+        max_candidates=2,
+    )
+    new_data = opt.reduce_candidates_geographic()
+    assert new_data.n_j <= data.n_j
+    assert new_data.n_j >= 1
+    assert new_data.n_i == data.n_i
+    assert new_data.a.shape == (data.n_i, new_data.n_j)
+    assert len(new_data.c) == new_data.n_j
+
+
+def test_eps_mode_geographic_accepted():
+    opt = Optimization(eps_mode="geographic", n_geo_clusters=4, geo_cluster_method="pam")
+    assert opt.eps_mode == "geographic"
+    assert opt.n_geo_clusters == 4
+    assert opt.geo_cluster_method == "pam"
+
+
+def test_eps_mode_invalid_falls_back_notebook():
+    opt = Optimization(eps_mode="unknown_mode")
+    assert opt.eps_mode == "notebook"

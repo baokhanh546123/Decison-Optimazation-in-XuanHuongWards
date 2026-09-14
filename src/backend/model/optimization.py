@@ -31,10 +31,12 @@ Early stopping (2 tầng)
 
 Sau sweep: `re_solve_flagged=True` re-solve các điểm non-monotonic hoặc gap cao.
 
-Hai chế độ (eps_mode)
----------------------
-- notebook: ε_max = Σ c_j, không giảm |J| (đối chiếu ipynb).
-- tight:    ε_max = top-P_max costs; có thể auto_reduce candidate.
+Ba chế độ (eps_mode)
+--------------------
+- notebook:    ε_max = Σ c_j, không giảm |J| (đối chiếu ipynb).
+- tight:       ε_max = top-P_max costs; auto_reduce theo coverage weight.
+- geographic:  Spatial Decomposition — cluster ứng viên (KMeans/PAM),
+               giảm cục bộ từng cụm, hợp nghiệm, rồi ε-sweep trên J đã giảm.
 """
 
 import os
@@ -50,6 +52,12 @@ from utils.load_data import clean_roads
 from utils.candidate_grid import *
 from core.coverage import build_coverage_matrix_sparse
 from core.solver_worker import EpsilonTask, solve_one_epsilon
+from model.geo_decomp import (
+    candidate_xy_utm,
+    kmeans_numpy,
+    pam_numpy,
+    select_indices_by_cluster,
+)
 
 
 class Optimization:
@@ -60,6 +68,7 @@ class Optimization:
         "re_solve_time_limit", "grid_spacing_m", "street_spacing_m", "SCALE",
         "CPU_COUNT", "utm_epsg", "max_candidates", "eps_mode",
         "early_stop", "early_stop_patience", "early_stop_tol", "re_solve_gap_threshold",
+        "n_geo_clusters", "geo_cluster_method", "geo_max_per_cluster",
     )
 
     def __init__(
@@ -90,6 +99,9 @@ class Optimization:
         utm_epsg: int = 32648,
         max_candidates: int = 1200,
         eps_mode: str = "notebook",
+        n_geo_clusters: int = 6,
+        geo_cluster_method: str = "kmeans",
+        geo_max_per_cluster: Optional[int] = None,
     ):
         """
         Parameters
@@ -100,7 +112,12 @@ class Optimization:
             Early-stop **sweep**: dừng khi f1 bão hòa qua `early_stop_patience` điểm.
         re_solve_flagged : bool
             Sau sweep, re-solve điểm non-monotonic hoặc gap > re_solve_gap_threshold.
-        eps_mode : {"notebook", "tight"}
+        eps_mode : {"notebook", "tight", "geographic"}
+        n_geo_clusters : int
+            Số cụm không gian (mode geographic).
+        geo_cluster_method : {"kmeans", "pam"}
+        geo_max_per_cluster : int | None
+            Quota ứng viên mỗi cụm; None → chia đều max_candidates.
         """
         self.data = data
         self.demand_set = demand_set
@@ -127,7 +144,13 @@ class Optimization:
         self.CPU_COUNT = max(1, os.cpu_count() or 1) if CPU_COUNT is None else CPU_COUNT
         self.utm_epsg = utm_epsg
         self.max_candidates = max_candidates
-        self.eps_mode = eps_mode if eps_mode in ("notebook", "tight") else "notebook"
+        valid = ("notebook", "tight", "geographic")
+        self.eps_mode = eps_mode if eps_mode in valid else "notebook"
+        self.n_geo_clusters = max(1, int(n_geo_clusters))
+        self.geo_cluster_method = (
+            geo_cluster_method if geo_cluster_method in ("kmeans", "pam") else "kmeans"
+        )
+        self.geo_max_per_cluster = geo_max_per_cluster
 
         if self.n_parallel * self.workers_per_solve > self.CPU_COUNT:
             print(
@@ -172,6 +195,79 @@ class Optimization:
             f"[OK] Candidate reduction: |J| {n_j} → {new_data.n_j} "
             f"(top by coverage weight, max_candidates={K})"
         )
+        self.data = new_data
+        return new_data
+
+    def reduce_candidates_geographic(
+        self,
+        data: Optional[MCLP_Data] = None,
+        n_clusters: Optional[int] = None,
+        method: Optional[str] = None,
+        max_per_cluster: Optional[int] = None,
+    ) -> MCLP_Data:
+        """Spatial Decomposition: cluster candidates → local top-k → merge.
+
+        Giữ nguyên ý nghĩa covering; chỉ thay J bằng J' ⊆ J chọn theo cụm + weight.
+        """
+        data = data if data is not None else self.data
+        if data is None:
+            raise ValueError("data is None")
+
+        k = int(n_clusters if n_clusters is not None else self.n_geo_clusters)
+        method = (method or self.geo_cluster_method).lower()
+        if method not in ("kmeans", "pam"):
+            method = "kmeans"
+
+        n_j = data.n_j
+        if n_j <= 1:
+            return data
+
+        k = min(k, n_j)
+        xy = candidate_xy_utm(self.candidate_set, self.utm_epsg)
+        if xy.shape[0] != n_j:
+            raise ValueError(
+                f"candidate_set size ({xy.shape[0]}) != data.n_j ({n_j})"
+            )
+
+        if method == "pam" and n_j > 3000:
+            print(f"[GEO] |J|={n_j} lớn → fallback KMeans (PAM chậm).")
+            method = "kmeans"
+
+        labels = pam_numpy(xy, k) if method == "pam" else kmeans_numpy(xy, k)
+
+        weights = np.zeros(n_j, dtype=np.float64)
+        for i, js in enumerate(data.coverage_lists):
+            pi = float(data.p[i])
+            for j in js:
+                weights[int(j)] += pi
+
+        if max_per_cluster is not None:
+            quota = int(max_per_cluster)
+        elif self.geo_max_per_cluster is not None:
+            quota = int(self.geo_max_per_cluster)
+        else:
+            quota = max(1, int(np.ceil(self.max_candidates / k)))
+
+        keep_arr = select_indices_by_cluster(labels, weights, quota)
+        a_new = data.a[:, keep_arr].tocsr()
+        c_new = data.c[keep_arr]
+        new_data = MCLP_Data(
+            p=data.p.copy(),
+            a=a_new,
+            c=c_new,
+            P_max=data.P_max,
+            budget=data.budget,
+            must_cover=data.must_cover.copy() if data.must_cover is not None else None,
+        )
+        print(
+            f"[OK] Geographic reduction ({method}): |J| {n_j} → {new_data.n_j} "
+            f"(n_clusters={k}, quota/cluster≈{quota})"
+        )
+        for c in range(k):
+            sz = int(np.sum(labels == c))
+            tk = int(np.sum(np.isin(keep_arr, np.where(labels == c)[0])))
+            if sz:
+                print(f"      cluster {c}: size={sz} → keep={tk}")
         self.data = new_data
         return new_data
 
@@ -329,7 +425,7 @@ class Optimization:
 
         if data.budget is not None:
             eps_max = float(data.budget)
-        elif self.eps_mode == "tight" and data.P_max is not None and int(data.P_max) < data.n_j:
+        elif self.eps_mode in ("tight", "geographic") and data.P_max is not None and int(data.P_max) < data.n_j:
             P = int(data.P_max)
             eps_max = float(np.sort(c)[-P:].sum()) * 1.01
         else:
@@ -355,12 +451,14 @@ class Optimization:
         if self.data is None:
             raise ValueError("self.data chưa được gán")
 
-        if auto_reduce and self.data.n_j > self.max_candidates:
+        if self.eps_mode == "geographic":
+            self.reduce_candidates_geographic()
+        elif auto_reduce and self.data.n_j > self.max_candidates:
             self.reduce_candidates_by_coverage(max_candidates=self.max_candidates)
         else:
             print(
                 f"[EXPERIMENT] Không giảm candidate — |J|={self.data.n_j} "
-                f"(giống notebook, auto_reduce=False)"
+                f"(mode={self.eps_mode}, auto_reduce={auto_reduce})"
             )
 
         data = self.data
@@ -393,7 +491,6 @@ class Optimization:
         if self.use_hint:
             hint_x = self._greedy_solution_simple(float(epsilons[-1]))
 
-        # Sweep-level early-stop state
         plateau_count = 0
         best_f1_seen = -np.inf
         stopped_early = False
@@ -446,7 +543,6 @@ class Optimization:
                         f"gap={r['optimality_gap_pct']:.2f}%{diag}  t={r['solve_time_s']:.1f}s"
                     )
 
-                    # --- Sweep early-stop: f1 plateau ---
                     if self.early_stop:
                         f1 = float(r["f1_covering_profit"])
                         if f1 > best_f1_seen + self.early_stop_tol:
@@ -483,6 +579,32 @@ class Optimization:
         finally:
             self.eps_mode = prev
 
+    def epsilon_constraint_sweep_geographic(
+        self,
+        n_clusters: Optional[int] = None,
+        method: Optional[str] = None,
+        max_per_cluster: Optional[int] = None,
+    ):
+        """API geographic: Spatial Decomposition + ε-sweep trên tập đã giảm."""
+        prev_mode = self.eps_mode
+        prev_k = self.n_geo_clusters
+        prev_m = self.geo_cluster_method
+        prev_q = self.geo_max_per_cluster
+        self.eps_mode = "geographic"
+        if n_clusters is not None:
+            self.n_geo_clusters = int(n_clusters)
+        if method is not None:
+            self.geo_cluster_method = method
+        if max_per_cluster is not None:
+            self.geo_max_per_cluster = max_per_cluster
+        try:
+            return self.epsilon_constraint_sweep(auto_reduce=False)
+        finally:
+            self.eps_mode = prev_mode
+            self.n_geo_clusters = prev_k
+            self.geo_cluster_method = prev_m
+            self.geo_max_per_cluster = prev_q
+
     def _flag_non_monotonic(self, results: list) -> None:
         running_max_f1 = -np.inf
         for r in results:
@@ -499,7 +621,7 @@ class Optimization:
         n_j: int,
         best_hint: Optional[Sequence[int]] = None,
     ) -> None:
-        """Re-solve điểm non-monotonic hoặc gap > threshold (mở rộng so với notebook)."""
+        """Re-solve điểm non-monotonic hoặc gap > threshold."""
         data = self.data
         gap_threshold = self.re_solve_gap_threshold
         flagged_idx = [
@@ -580,5 +702,5 @@ class Optimization:
         if avg_gap > 20:
             print(
                 f"      [CẢNH BÁO] gap TB > 20% — với |J| lớn không reduction đây là dự kiến. "
-                f"Thử eps_mode='tight' + auto_reduce=True để so sánh."
+                f"Thử eps_mode='tight'/'geographic' + auto_reduce để so sánh."
             )

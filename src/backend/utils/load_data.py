@@ -49,26 +49,60 @@ def load_places(path : str , min_confidence : float = None) -> gpd.GeoDataFrame:
   return gdf
 
 def clean_roads(roads_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Bước 1: parse modes, loại rail/unknown/hạ tầng lỗi, gắn walkable_tier."""
-    df = roads_gdf[roads_gdf["subtype"] == "road"].copy()
+    """Bước 1: parse modes, loại rail/unknown/hạ tầng lỗi, gắn walkable_tier.
 
-    df["allowed_modes_set"] = df["allowed_modes"].apply(_parse_modes)
-    df["denied_modes_set"] = df["denied_modes"].apply(_parse_modes)
+    Tương thích cả schema Overture đầy đủ (có subtype) lẫn file đã bị cắt cột.
+    """
+    df = roads_gdf.copy()
+
+    # --- subtype: nếu thiếu thì giả định toàn bộ là road ---
+    if "subtype" in df.columns:
+        df = df[df["subtype"] == "road"].copy()
+    else:
+        # fallback: giữ nguyên, chỉ cảnh báo 1 lần
+        print("[WARN] Cột 'subtype' không tồn tại trong roads → bỏ qua filter subtype=='road'")
+
+    # --- allowed/denied modes (có thể thiếu) ---
+    if "allowed_modes" in df.columns:
+        df["allowed_modes_set"] = df["allowed_modes"].apply(_parse_modes)
+    else:
+        df["allowed_modes_set"] = None
+
+    if "denied_modes" in df.columns:
+        df["denied_modes_set"] = df["denied_modes"].apply(_parse_modes)
+    else:
+        df["denied_modes_set"] = None
+
+    # --- hạ tầng loại trừ (bridge/tunnel/under construction) ---
+    def _bool_col(name: str) -> pd.Series:
+        if name not in df.columns:
+            return pd.Series(False, index=df.index)
+        return df[name].fillna(False).astype(bool)
 
     df["is_excluded_infra"] = (
-        (df["has_bridge"].fillna(False)).astype(bool)
-        | (df["has_tunnel"].fillna(False)).astype(bool)
-        | (df["is_under_construction"].fillna(False)).astype(bool)
+        _bool_col("has_bridge")
+        | _bool_col("has_tunnel")
+        | _bool_col("is_under_construction")
     )
 
-    df["is_candidate_eligible"] = (
-        ~df["class"].isin(config.candidate_excluded_class)
-        & (df["class"] != "unknown")
-        & ~df["is_excluded_infra"]
-    )
+    # --- class (bắt buộc cho eligibility) ---
+    if "class" not in df.columns:
+        # fallback an toàn: coi mọi segment đều eligible
+        print("[WARN] Cột 'class' không tồn tại → đánh dấu toàn bộ is_candidate_eligible=True")
+        df["class"] = "unknown"
+        df["is_candidate_eligible"] = True
+    else:
+        df["is_candidate_eligible"] = (
+            ~df["class"].isin(config.candidate_excluded_class)
+            & (df["class"] != "unknown")
+            & ~df["is_excluded_infra"]
+        )
 
     df["walkable_tier"] = np.select(
-        [~df["is_candidate_eligible"], df["class"].isin(config.candidate_low_priority_class)],
+        [
+            ~df["is_candidate_eligible"],
+            df["class"].isin(config.candidate_low_priority_class),
+        ],
         ["excluded", "low_priority"],
         default="primary",
     )

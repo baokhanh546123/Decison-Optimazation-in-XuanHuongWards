@@ -5,13 +5,17 @@ Luồng:
   1. Load boundary + demand + roads (path tương đối từ repo root)
   2. Sinh candidate set (grid + street)
   3. Build MCLP_Data (sparse coverage)
-  4. ε-constraint sweep (early_stop + re_solve)
+  4. ε-constraint sweep (early_stop + re_solve); eps_mode="geographic" thêm
+     bước Spatial Decomposition (KMeans/PAM) trước sweep — xem
+     Optimization.reduce_candidates_geographic() trong model/optimization.py.
   5. (Tuỳ chọn) export bản đồ Pareto HTML / JPEG
 
 Chạy từ repo root:
   PYTHONPATH=src/backend python src/backend/test.py
   PYTHONPATH=src/backend python src/backend/test.py --mode tight --export-map
   PYTHONPATH=src/backend python src/backend/test.py --n-points 8 --time-limit 120
+  PYTHONPATH=src/backend python src/backend/test.py --mode geographic --n-cls 8 --mode-cls kmeans
+  PYTHONPATH=src/backend python src/backend/test.py --mode geographic --n-cls 6 --mode-cls pam --geo-max-per-cluster 40
 """
 from __future__ import annotations
 
@@ -119,9 +123,18 @@ def run_sweep(
     re_solve_flagged: bool = True,
     auto_reduce: bool = False,
     max_candidates: int = 1200,
-    re_solve_time_limit : int = 600
+    re_solve_time_limit: int = 600,
+    n_geo_clusters: int = 6,
+    geo_cluster_method: str = "kmeans",
+    geo_max_per_cluster: int | None = None,
 ):
-    """Chạy ε-constraint sweep và in bảng kết quả."""
+    """Chạy ε-constraint sweep và in bảng kết quả.
+
+    mode="geographic": Spatial Decomposition (KMeans/PAM) chạy TRƯỚC sweep,
+    thay thế reduce_candidates_by_coverage — n_geo_clusters/geo_cluster_method/
+    geo_max_per_cluster chỉ có tác dụng khi mode="geographic" (xem
+    Optimization.reduce_candidates_geographic trong model/optimization.py).
+    """
     opt = Optimization(
         data=mclp,
         demand_set=demand_gdf,
@@ -141,12 +154,20 @@ def run_sweep(
         re_solve_gap_threshold=20.0,
         max_candidates=max_candidates,
         eps_mode=mode,
+        n_geo_clusters=n_geo_clusters,
+        geo_cluster_method=geo_cluster_method,
+        geo_max_per_cluster=geo_max_per_cluster,
     )
 
+    extra_geo = (
+        f"  n_cls={n_geo_clusters}  mode_cls={geo_cluster_method}"
+        f"{f'  geo_max_per_cluster={geo_max_per_cluster}' if geo_max_per_cluster else ''}"
+        if mode == "geographic" else ""
+    )
     print(
         f"\n[RUN] ε-sweep  mode={mode}  n_points={n_points}  "
         f"time_limit={time_limit_s}s  early_stop={early_stop}  "
-        f"re_solve={re_solve_flagged}  auto_reduce={auto_reduce}"
+        f"re_solve={re_solve_flagged}  auto_reduce={auto_reduce}{extra_geo}"
     )
     results = opt.epsilon_constraint_sweep(auto_reduce=auto_reduce)
 
@@ -205,8 +226,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="MO-MCLP end-to-end test pipeline (Xuân Hương)",
     )
     p.add_argument(
-        "--mode", choices=("notebook", "tight"), default="notebook",
-        help="eps_mode: notebook=Σc (đối chiếu ipynb); tight=top-P_max costs",
+        "--mode", choices=("notebook", "tight", "geographic"), default="notebook",
+        help=(
+            "eps_mode: notebook=Σc (đối chiếu ipynb); tight=top-P_max costs; "
+            "geographic=Spatial Decomposition (KMeans/PAM) trước khi sweep "
+            "(xem --n-cls/--mode-cls/--geo-max-per-cluster)"
+        ),
     )
     p.add_argument("--p-max", type=int, default=3)
     p.add_argument("--n-points", type=int, default=12)
@@ -219,10 +244,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--ward-index", type=int, default=2)
     p.add_argument(
         "--auto-reduce", action="store_true",
-        help="Giảm |J| theo coverage weight (max_candidates)",
+        help="Giảm |J| theo coverage weight (max_candidates) — chỉ dùng khi --mode != geographic",
     )
-    p.add_argument("--re_solve-time-limit" , type = int , default=120)
+    p.add_argument("--re_solve-time-limit", type=int, default=120)
     p.add_argument("--max-candidates", type=int, default=1200)
+    p.add_argument(
+        "--n-cls", type=int, default=6, dest="n_geo_clusters",
+        help="Số cụm không gian (chỉ dùng khi --mode geographic)",
+    )
+    p.add_argument(
+        "--mode-cls", choices=("kmeans", "pam"), default="kmeans", dest="geo_cluster_method",
+        help="Thuật toán cluster: kmeans (Lloyd, nhanh) hoặc pam (k-medoids, "
+             "chính xác hơn nhưng chậm — tự fallback về kmeans nếu |J| > 3000)",
+    )
+    p.add_argument(
+        "--geo-max-per-cluster", type=int, default=None, dest="geo_max_per_cluster",
+        help="Quota candidate giữ lại mỗi cụm (mặc định: max_candidates / n_cls)",
+    )
     p.add_argument(
         "--no-early-stop", action="store_true",
         help="Tắt sweep early-stop khi f1 bão hòa",
@@ -273,6 +311,9 @@ def main(argv: list[str] | None = None) -> int:
         re_solve_time_limit=args.re_solve_time_limit,
         auto_reduce=args.auto_reduce,
         max_candidates=args.max_candidates,
+        n_geo_clusters=args.n_geo_clusters,
+        geo_cluster_method=args.geo_cluster_method,
+        geo_max_per_cluster=args.geo_max_per_cluster,
     )
 
     if not results:

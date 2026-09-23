@@ -1,1 +1,1 @@
-PLACEHOLDER
+{"source":"data/Xuanhuongward/Xuan Huong Wards_featured.geojson","taxonomy_map":{"food_and_drink":"food_and_drink","lodging":"accommodation","health_care":"health_and_medicine"},"counts_full":{"food_and_drink":4240,"accommodation":3871,"health_and_medicine":169},"candidates":[{"id":"7c1c5196-05c4-43cb-913a-27d3cfe97795","name":"Highlands Coffee 01 Hai Ba Trung DL","taxonomy":"food_and_drink","taxonomy_root":"food_and_drink","confidence":0.9972,"lng":108.431247,"lat":11.94255541,"address":"01 - 03 Đường Hai Bà Trưng","primary":"cafe","uid":"C-001"}]}

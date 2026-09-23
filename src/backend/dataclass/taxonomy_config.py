@@ -7,6 +7,7 @@ class TaxonomyConfig:
     # --- Demand: taxonomy_root -> trọng số p_i và bán kính phủ riêng ---
     taxonomy_root_weight: Dict[str, float] = field(default_factory=lambda: {
         "food_and_drink": 1.0,
+        "lodging": 0.9,
         "accommodation": 0.9,
         "arts_and_entertainment": 0.7,
         "retail": 0.6,
@@ -14,6 +15,7 @@ class TaxonomyConfig:
         "travel_services": 0.5,
         "sports_and_recreation": 0.5,
         "health_and_medicine": 0.3,
+        "health_care": 0.3,
         "services_and_business": 0.3,
         "financial_service": 0.2,
         "education": 0.2,
@@ -25,6 +27,7 @@ class TaxonomyConfig:
 
     taxonomy_root_radius_m: Dict[str, float] = field(default_factory=lambda: {
         "food_and_drink": 300,
+        "lodging": 400,
         "accommodation": 400,
         "arts_and_entertainment": 500,
         "attractions_and_activities": 800,
@@ -32,6 +35,7 @@ class TaxonomyConfig:
         "travel_services": 500,
         "sports_and_recreation": 500,
         "health_and_medicine": 1000,
+        "health_care": 1000,
         "services_and_business": 500,
         "financial_service": 800,
         "education": 800,

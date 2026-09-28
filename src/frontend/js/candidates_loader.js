@@ -5,8 +5,7 @@
  */
 (function () {
   function taxMeta(tax) {
-    if (typeof TAX !== "undefined" && TAX[tax]) return TAX[tax];
-    return { label: tax || "other", dot: "dot-food" };
+    return (window.TAX && window.TAX[tax]) || { label: tax || "other", color: "#8ea092" };
   }
   window.taxMeta = taxMeta;
 

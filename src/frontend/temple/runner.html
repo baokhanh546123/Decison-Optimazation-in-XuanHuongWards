@@ -10,44 +10,97 @@
   </style>
 </head>
 <body>
-  <p id="msg">Đang tải runner + candidates từ GeoJSON…</p>
+  <p id="msg">Đang tải runner…</p>
   <script>
 (function () {
-  var MAIN_RUNNER =
+  var MAIN =
     "https://raw.githubusercontent.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards/main/src/frontend/temple/runner.html";
 
-  function patchCandidates(html) {
-    var start = html.indexOf("  var STREETS = [");
-    var end = html.indexOf("  var selected = new Set();");
-    if (start >= 0 && end > start) {
-      var replacement =
-        "  /* Candidates from XuanHuongWarsFeaturesClean.geojson via GET /api/candidates */\n" +
+  function patch(html) {
+    /* 1) Replace mock STREETS block — keep TAX/renderGrid/GSAP intact */
+    var a = html.indexOf("  var TAX = {");
+    var b = html.indexOf("  var selected = new Set();");
+    if (a >= 0 && b > a) {
+      var block =
+        "  var TAX = {\n" +
+        '    food_and_drink: { label: "food_and_drink", dot: "dot-food" },\n' +
+        '    lodging: { label: "lodging", dot: "dot-stay" },\n' +
+        '    accommodation: { label: "accommodation", dot: "dot-stay" },\n' +
+        '    health_and_medicine: { label: "health_and_medicine", dot: "dot-health" },\n' +
+        '    health_care: { label: "health_care", dot: "dot-health" },\n' +
+        '    arts_and_entertainment: { label: "arts_and_entertainment", dot: "dot-food" },\n' +
+        '    shopping: { label: "shopping", dot: "dot-food" },\n' +
+        '    retail: { label: "retail", dot: "dot-food" },\n' +
+        '    services_and_business: { label: "services_and_business", dot: "dot-food" },\n' +
+        '    lifestyle_services: { label: "lifestyle_services", dot: "dot-food" },\n' +
+        '    travel_and_transportation: { label: "travel_and_transportation", dot: "dot-stay" },\n' +
+        '    sports_and_recreation: { label: "sports_and_recreation", dot: "dot-food" },\n' +
+        '    education: { label: "education", dot: "dot-health" },\n' +
+        '    community_and_government: { label: "community_and_government", dot: "dot-health" },\n' +
+        '    cultural_and_historic: { label: "cultural_and_historic", dot: "dot-food" },\n' +
+        '    geographic_entities: { label: "geographic_entities", dot: "dot-food" }\n' +
+        "  };\n" +
+        "  function taxMeta(tax) {\n" +
+        "    if (TAX[tax]) return TAX[tax];\n" +
+        '    return { label: tax || "other", dot: "dot-food" };\n' +
+        "  }\n" +
         "  var candidates = [];\n" +
         "  window.candidates = candidates;\n\n";
-      html = html.slice(0, start) + replacement + html.slice(end);
+      html = html.slice(0, a) + block + html.slice(b);
     }
-    if (html.indexOf("candidates_loader.js") < 0) {
-      html = html.replace(
-        "</body>",
-        '  <script src="/js/candidates_loader.js"><\/script>\n</body>'
-      );
+
+    /* 2) Safe TAX access */
+    html = html.split("TAX[c.taxonomy].dot").join("taxMeta(c.taxonomy).dot");
+    html = html.split("TAX[c.taxonomy].label").join("taxMeta(c.taxonomy).label");
+
+    /* 3) Inject API load before last renderGrid() */
+    var inject =
+      "  function loadRealCandidates() {\n" +
+      '    fetch("/api/candidates?per_tax=40")\n' +
+      "      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })\n" +
+      "      .then(function (payload) {\n" +
+      "        var list = (payload && payload.candidates) ? payload.candidates : [];\n" +
+      "        candidates.length = 0;\n" +
+      "        list.forEach(function (c, i) {\n" +
+      "          var tax = c.taxonomy || c.taxonomy_root || 'food_and_drink';\n" +
+      "          if (!TAX[tax]) TAX[tax] = { label: tax, dot: 'dot-food' };\n" +
+      "          candidates.push({\n" +
+      "            id: c.uid || ('C-' + String(i + 1).padStart(3, '0')),\n" +
+      "            name: c.name || 'Unnamed',\n" +
+      "            taxonomy: tax,\n" +
+      "            taxonomy_root: c.taxonomy_root || tax,\n" +
+      "            confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : '0.00',\n" +
+      "            weight: c.weight != null ? c.weight : 0.3,\n" +
+      "            radius_m: c.radius_m != null ? c.radius_m : 500,\n" +
+      "            lat: c.lat, lng: c.lng,\n" +
+      "            address: c.address || '',\n" +
+      "            primary: c.primary || ''\n" +
+      "          });\n" +
+      "        });\n" +
+      "        renderGrid();\n" +
+      "        if (typeof updateSummary === 'function') updateSummary();\n" +
+      "        if (typeof updateNav === 'function') updateNav();\n" +
+      "      })\n" +
+      "      .catch(function (err) { console.error('[candidates]', err); });\n" +
+      "  }\n" +
+      "  loadRealCandidates();\n";
+
+    var last = html.lastIndexOf("  renderGrid();");
+    if (last >= 0) {
+      html = html.slice(0, last) + inject + "\n" + html.slice(last);
     }
     return html;
   }
 
-  fetch(MAIN_RUNNER)
-    .then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    })
+  fetch(MAIN)
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
     .then(function (html) {
       document.open();
-      document.write(patchCandidates(html));
+      document.write(patch(html));
       document.close();
     })
     .catch(function (err) {
-      document.getElementById("msg").textContent =
-        "Không tải được runner: " + err.message;
+      document.getElementById("msg").textContent = "Lỗi tải runner: " + err.message;
     });
 })();
   </script>

@@ -6,21 +6,17 @@
   /* ---------------------------------------------------------------------
      3.1 — Dữ liệu candidate mô phỏng
   --------------------------------------------------------------------- */
-  var TAX = {
-    food_and_drink:      { label: 'food_and_drink',      dot: 'dot-food'   },
-    accommodation:        { label: 'accommodation',       dot: 'dot-stay'   },
-    health_and_medicine:  { label: 'health_and_medicine', dot: 'dot-health' },
-    /* [interface] khoá theo cột taxonomy_root của GeoJSON */
-    lodging:              { label: 'lodging',             dot: 'dot-stay'   },
-    health_care:          { label: 'health_care',         dot: 'dot-health' }
-  };
+  /* [interface] TAX chỉ còn là registry: root -> { label, color }.
+     Nhãn đẹp và màu chấm được sinh tự động cho MỌI taxonomy, dùng chung ở chip / thẻ / threshold / bước 3. */
+  var TAX = {};
+
 
   var STREETS = ['Trần Hưng Đạo', 'Hồ Xuân Hương', 'Yersin', 'Phù Đổng Thiên Vương',
     'Nguyễn Chí Thanh', 'Bùi Thị Xuân', 'Xô Viết Nghệ Tĩnh', 'Ba Tháng Hai',
     'Nguyễn Văn Trỗi', 'Lê Đại Hành', 'Phan Đình Phùng', 'Trần Phú',
     'Đống Đa', 'Hoàng Văn Thụ'];
 
-  var TAX_KEYS = Object.keys(TAX);
+  var TAX_KEYS = ['food_and_drink', 'accommodation', 'health_and_medicine'];
 
   var candidates = STREETS.map(function(street, i){
     var tax = TAX_KEYS[i % TAX_KEYS.length];
@@ -33,11 +29,26 @@
   });
 
   /* [interface] taxonomy ngoài 3 nhóm gốc vẫn render được (dữ liệu thật có ~13 nhóm) */
-  function meta(t){
-    if (TAX[t]) return TAX[t];
-    var h = 0; for (var i = 0; i < (t || '').length; i++) h = (h * 31 + t.charCodeAt(i)) % 6;
-    return { label: t || 'other', dot: 'dot-t' + h };
+  /* 'food_and_drink' -> 'Food & Drink', 'health_care' -> 'Health Care' */
+  function prettyLabel(t){
+    return String(t || 'other').split('_').map(function(w){
+      return w === 'and' ? '&' : w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
   }
+  function hashHue(t){ var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360; return h; }
+
+  /* mỗi taxonomy 1 màu duy nhất: hue theo golden-angle để các màu cách xa nhau */
+  function registerTax(list){
+    list.slice().sort().forEach(function(t, idx){
+      TAX[t] = { label: prettyLabel(t), color: 'hsl(' + Math.round((idx * 137.508 + 38) % 360) + ',55%,62%)' };
+    });
+  }
+  function meta(t){
+    if (!TAX[t]) TAX[t] = { label: prettyLabel(t), color: 'hsl(' + hashHue(String(t)) + ',55%,62%)' };
+    return TAX[t];
+  }
+  function dot(t){ return '<span class="chip__dot" style="background:' + meta(t).color + '"></span>'; }
+  registerTax(TAX_KEYS);
   window.TAX = TAX;
   window.candidates = candidates;
 
@@ -74,7 +85,7 @@
         '</div>' +
         '<div class="candidate__name">' + c.name + '</div>' +
         '<div class="candidate__meta">' +
-          '<span class="candidate__tax"><span class="chip__dot ' + meta(c.taxonomy).dot + '"></span>' + meta(c.taxonomy).label + '</span>' +
+          '<span class="candidate__tax">' + dot(c.taxonomy) + meta(c.taxonomy).label + '</span>' +
           '<span class="candidate__conf">conf ' + c.confidence + '</span>' +
         '</div>';
       card.addEventListener('click', function(){ toggleCandidate(c.id, card); });
@@ -110,12 +121,13 @@
 
   window.renderGrid = renderGrid;
   window.rebuildChips = function(list){
+    registerTax(list);   /* gán màu đồng bộ cho toàn bộ taxonomy thật */
     var group = document.getElementById('filter-group');
     group.innerHTML = '<button class="chip is-active" data-filter="all">Tất cả</button>';
     list.forEach(function(t){
       var b = document.createElement('button');
       b.className = 'chip'; b.dataset.filter = t;
-      b.innerHTML = '<span class="chip__dot ' + meta(t).dot + '"></span>' + meta(t).label;
+      b.innerHTML = dot(t) + meta(t).label;
       group.appendChild(b);
     });
     activeFilter = 'all';
@@ -151,7 +163,7 @@
       row.className = 'threshold-row';
       row.innerHTML =
         '<div class="threshold-row__head">' +
-          '<span class="threshold-row__name">' + c.name + '<span>' + c.id + ' · ' + meta(c.taxonomy).label + '</span></span>' +
+          '<span class="threshold-row__name">' + c.name + '<span>' + c.id + ' · ' + dot(c.taxonomy) + meta(c.taxonomy).label + '</span></span>' +
         '</div>' +
         '<div class="threshold-grid">' +
           '<div class="field">' +
@@ -235,8 +247,8 @@
       });
       var card = document.createElement('div');
       card.className = 'tax-card';
-      card.innerHTML = '<div class="tax-card__head"><span class="tax-card__name"><span class="chip__dot ' +
-        meta(root).dot + '"></span>' + meta(root).label + '</span><span class="tax-card__n">' + by[root].length + ' cell</span></div>';
+      card.innerHTML = '<div class="tax-card__head"><span class="tax-card__name">' +
+        dot(root) + meta(root).label + '</span><span class="tax-card__n">' + by[root].length + ' cell</span></div>';
       var grid = document.createElement('div'); grid.className = 'params-grid';
       grid.appendChild(taxSlider('Bán kính phủ radius_m', 50, 2000, 10, p.radius,
         function(v){ return v + ' m'; }, function(v){ p.radius = v; }));

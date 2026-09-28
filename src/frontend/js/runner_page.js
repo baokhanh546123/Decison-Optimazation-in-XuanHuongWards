@@ -9,7 +9,10 @@
   var TAX = {
     food_and_drink:      { label: 'food_and_drink',      dot: 'dot-food'   },
     accommodation:        { label: 'accommodation',       dot: 'dot-stay'   },
-    health_and_medicine:  { label: 'health_and_medicine', dot: 'dot-health' }
+    health_and_medicine:  { label: 'health_and_medicine', dot: 'dot-health' },
+    /* [interface] khoá theo cột taxonomy_root của GeoJSON */
+    lodging:              { label: 'lodging',             dot: 'dot-stay'   },
+    health_care:          { label: 'health_care',         dot: 'dot-health' }
   };
 
   var STREETS = ['Trần Hưng Đạo', 'Hồ Xuân Hương', 'Yersin', 'Phù Đổng Thiên Vương',
@@ -30,7 +33,11 @@
   });
 
   /* [interface] taxonomy ngoài 3 nhóm gốc vẫn render được (dữ liệu thật có ~13 nhóm) */
-  function meta(t){ return TAX[t] || { label: t || 'other', dot: 'dot-food' }; }
+  function meta(t){
+    if (TAX[t]) return TAX[t];
+    var h = 0; for (var i = 0; i < (t || '').length; i++) h = (h * 31 + t.charCodeAt(i)) % 6;
+    return { label: t || 'other', dot: 'dot-t' + h };
+  }
   window.TAX = TAX;
   window.candidates = candidates;
 
@@ -87,6 +94,7 @@
 
     selectedCountEl.textContent = selected.size;
     renderThresholdList();
+    renderTaxParams();
     updateSummary();
     updateNav();
   }
@@ -112,6 +120,7 @@
     });
     activeFilter = 'all';
     renderGrid();
+    renderTaxParams();
   };
 
   /* ---------------------------------------------------------------------
@@ -180,9 +189,78 @@
     });
   }
 
-  bindRange('radius-food',   'val-radius-food',   function(v){ return v + ' m'; });
-  bindRange('radius-stay',   'val-radius-stay',   function(v){ return v + ' m'; });
-  bindRange('radius-health', 'val-radius-health', function(v){ return v + ' m'; });
+  /* [interface] bán kính + trọng số theo taxonomy_root của các cell đã chọn.
+     Mặc định lấy từ candidate.radius_m / candidate.weight (nguồn: taxonomy_config.py). */
+  var taxParams = {};   /* root -> { radius, weight } — giữ lại giá trị người dùng đã chỉnh */
+  var taxHost = document.getElementById('tax-params');
+  var taxEmpty = document.getElementById('tax-empty');
+
+  function selectedByRoot(){
+    var out = {};
+    selected.forEach(function(id){
+      var c = candidates.find(function(x){ return x.id === id; });
+      if (!c) return;
+      (out[c.taxonomy] = out[c.taxonomy] || []).push(c);
+    });
+    return out;
+  }
+
+  function paintFill(input, fill){
+    fill.style.width = ((input.value - input.min) / (input.max - input.min) * 100) + '%';
+  }
+
+  function taxSlider(label, min, max, step, value, fmt, onChange){
+    var f = document.createElement('div');
+    f.className = 'field';
+    f.innerHTML = '<div class="field__label"><span>' + label + '</span><b></b></div>' +
+      '<div class="slider-wrap"><div class="slider-fill"></div>' +
+      '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '"></div>';
+    var input = f.querySelector('input'), out = f.querySelector('b'), fill = f.querySelector('.slider-fill');
+    function sync(){ out.textContent = fmt(input.value); paintFill(input, fill); }
+    input.addEventListener('input', function(){ onChange(parseFloat(input.value)); sync(); updateSummary(); });
+    sync();
+    return f;
+  }
+
+  function renderTaxParams(){
+    if (!taxHost) return;
+    var by = selectedByRoot(), roots = Object.keys(by).sort();
+    taxHost.innerHTML = '';
+    taxEmpty.style.display = roots.length ? 'none' : 'block';
+    roots.forEach(function(root){
+      var first = by[root][0];
+      var p = taxParams[root] || (taxParams[root] = {
+        radius: Math.min(2000, Math.max(50, first.radius_m != null ? +first.radius_m : 300)),
+        weight: Math.min(2, first.weight != null ? +first.weight : 0.5)
+      });
+      var card = document.createElement('div');
+      card.className = 'tax-card';
+      card.innerHTML = '<div class="tax-card__head"><span class="tax-card__name"><span class="chip__dot ' +
+        meta(root).dot + '"></span>' + meta(root).label + '</span><span class="tax-card__n">' + by[root].length + ' cell</span></div>';
+      var grid = document.createElement('div'); grid.className = 'params-grid';
+      grid.appendChild(taxSlider('Bán kính phủ radius_m', 50, 2000, 10, p.radius,
+        function(v){ return v + ' m'; }, function(v){ p.radius = v; }));
+      grid.appendChild(taxSlider('Trọng số p_i (weight)', 0, 2, 0.05, p.weight,
+        function(v){ return parseFloat(v).toFixed(2); }, function(v){ p.weight = v; }));
+      card.appendChild(grid);
+      taxHost.appendChild(card);
+    });
+  }
+
+  /* cấu hình gửi backend — cùng tên trường với TaxonomyUpdateRequest / OptimizeRequest */
+  window.getRunConfig = function(){
+    var roots = Object.keys(selectedByRoot()), tax = {};
+    roots.forEach(function(r){ tax[r] = { radius_m: taxParams[r].radius, weight: taxParams[r].weight }; });
+    return {
+      candidates: Array.from(selected),
+      taxonomy_root: tax,
+      per_candidate: perCandidateParams,
+      min_confidence: parseFloat(document.getElementById('confidence').value),
+      P_max: parseInt(document.getElementById('pmax').value, 10),
+      n_points: parseInt(document.getElementById('epsilon-steps').value, 10),
+      lambda: [parseInt(balanceInput.value, 10), 100 - parseInt(balanceInput.value, 10)]
+    };
+  };
   bindRange('confidence',    'val-confidence',    function(v){ return parseFloat(v).toFixed(2); });
   bindRange('epsilon-steps', 'val-epsilon',       function(v){ return v; });
 
@@ -198,8 +276,9 @@
   window.updateSummary = updateSummary;
   function updateSummary(){
     document.getElementById('sum-candidates').textContent = selected.size;
+    var rs = Object.keys(selectedByRoot()).map(function(r){ return taxParams[r] && taxParams[r].radius; }).filter(Boolean);
     document.getElementById('sum-radius').textContent =
-      document.getElementById('radius-food').value + '–' + document.getElementById('radius-health').value + ' m';
+      rs.length ? Math.min.apply(null, rs) + '–' + Math.max.apply(null, rs) + ' m' : '—';
     document.getElementById('sum-confidence').textContent =
       parseFloat(document.getElementById('confidence').value).toFixed(2);
     document.getElementById('sum-pmax').textContent = document.getElementById('pmax').value;
@@ -223,6 +302,7 @@
 
   btnRun.addEventListener('click', function(){
     if (selected.size === 0) return;
+    console.info('[run config]', window.getRunConfig());
     btnRun.disabled = true;
     pipelineEl.classList.add('is-visible');
 
@@ -533,5 +613,4 @@
   renderStepper(currentStep);
   updateNav();
 
-})();/* extracted from main runner.html - placeholder; full file in artifacts */
-console.warn('runner_page.js: replace with full content from artifacts/runner_page.js');
+})();

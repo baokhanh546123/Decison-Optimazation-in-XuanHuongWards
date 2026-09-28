@@ -22,7 +22,9 @@
         lng: c.lng,
         address: c.address || "",
         primary: c.primary || "",
-        featureId: c.id
+        featureId: c.id,
+        weight: c.weight,
+        radius_m: c.radius_m
       };
     });
 
@@ -36,39 +38,44 @@
     if (typeof renderGrid === "function") renderGrid();
     if (typeof updateSummary === "function") updateSummary();
     if (typeof updateNav === "function") updateNav();
+    if (typeof rebuildChips === "function") {
+      var chips = [];
+      var seen = {};
+      mapped.forEach(function (c) {
+        if (c.taxonomy && !seen[c.taxonomy]) { seen[c.taxonomy] = 1; chips.push(c.taxonomy); }
+      });
+      rebuildChips(chips.sort());
+    }
   }
 
   function loadCandidatesFromGeojson() {
     var grid = document.getElementById("candidate-grid");
     if (grid) {
       grid.innerHTML =
-        '<div class="empty-state" style="grid-column:1/-1">Đang tải candidates từ GeoJSON (geopandas)…</div>';
+        '<div class="empty-state" style="grid-column:1/-1">Đang tải candidates từ GeoJSON…</div>';
     }
-    fetch("/api/candidates?per_tax=40")
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (payload) {
-        var list = (payload && payload.candidates) ? payload.candidates : [];
-        console.info(
-          "[candidates]",
-          "engine=", payload.engine,
-          "source=", payload.source,
-          "counts=", payload.counts_full,
-          "roots=", payload.taxonomy_root_unique,
-          "n=", list.length
-        );
-        applyList(list);
-      })
-      .catch(function (err) {
-        console.error("Failed to load /api/candidates", err);
+    var urls = ["/static/candidates.json", "/static/candidates_xuanhuong.json", "/api/candidates?per_tax=40"];
+    function tryFetch(i) {
+      if (i >= urls.length) {
         if (grid) {
           grid.innerHTML =
-            '<div class="empty-state" style="grid-column:1/-1"><b>Không tải được candidates.</b> ' +
-            err.message + " — GET /api/candidates</div>";
+            '<div class="empty-state" style="grid-column:1/-1"><b>Không tải được candidates.</b> Kiểm tra /static/candidates.json hoặc /api/candidates</div>';
         }
-      });
+        return;
+      }
+      fetch(urls[i])
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (payload) {
+          var list = (payload && payload.candidates) ? payload.candidates : [];
+          console.info("[candidates]", "source=", payload.source, "n=", list.length);
+          applyList(list);
+        })
+        .catch(function () { tryFetch(i + 1); });
+    }
+    tryFetch(0);
   }
   window.loadCandidatesFromGeojson = loadCandidatesFromGeojson;
 

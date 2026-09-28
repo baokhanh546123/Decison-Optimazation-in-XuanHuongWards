@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"/><title>MCLP Runner</title></head>
+<body>
+<script>
+(async function(){
+  var b64 = "PLACEHOLDER";
+  var bin = atob(b64);
+  var bytes = new Uint8Array(bin.length);
+  for (var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  var ds = new DecompressionStream("gzip");
+  var stream = new Blob([bytes]).stream().pipeThrough(ds);
+  var html = await new Response(stream).text();
+  document.open(); document.write(html); document.close();
+})();
+</script>
+</body></html>

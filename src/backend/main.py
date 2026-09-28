@@ -18,29 +18,32 @@ ASSET_DIR = FRONTEND_DIR / "asset"
 STATIC_DIR = FRONTEND_DIR / "static"
 JS_DIR = FRONTEND_DIR / "js"
 DATA_DIR = ROOT_DIR / "data"
-# Real places dataset (cleaned) — same file as Colab notebook
 CLEAN_GEOJSON = DATA_DIR / "Xuanhuongward" / "XuanHuongWarsFeaturesClean.geojson"
 FEATURED_GEOJSON = DATA_DIR / "Xuanhuongward" / "Xuan Huong Wards_featured.geojson"
 RUNNER_HTML = TEMPLE_DIR / "runner.html"
 
-# GeoJSON taxonomy_root → UI filter chips in runner.html
-TAXONOMY_MAP = {
-    "food_and_drink": "food_and_drink",
+# taxonomy_config = source of truth for p_i weights + coverage radius (pre-solve)
+try:
+    from dataclass.taxonomy_config import DEFAULT_TAXONOMY_CONFIG
+except ImportError:  # pragma: no cover
+    from backend.dataclass.taxonomy_config import DEFAULT_TAXONOMY_CONFIG  # type: ignore
+
+TAX_CFG = DEFAULT_TAXONOMY_CONFIG
+
+# UI chip aliases only (optional display names) — NOT a filter whitelist
+UI_ALIAS = {
     "lodging": "accommodation",
-    "accommodation": "accommodation",
     "health_care": "health_and_medicine",
-    "health_and_medicine": "health_and_medicine",
 }
 
 app = FastAPI(
     title="MCLP Decision Optimization API",
     description="Backend for Maximal Covering Location Problem — Xuan Huong Wards.",
-    version="1.3.0",
+    version="1.4.0",
 )
 
 
 def _resolve_geojson() -> Path | None:
-    """Prefer cleaned places file; fall back to featured."""
     if CLEAN_GEOJSON.is_file():
         return CLEAN_GEOJSON
     if FEATURED_GEOJSON.is_file():
@@ -48,24 +51,34 @@ def _resolve_geojson() -> Path | None:
     return None
 
 
-def _load_candidates_geopandas(path: Path, min_confidence: float):
-    """Read places with geopandas (real project data)."""
+def _weight(root: str) -> float:
+    return float(TAX_CFG.taxonomy_root_weight.get(root, TAX_CFG.default_root_weight))
+
+
+def _radius_m(root: str) -> float:
+    return float(TAX_CFG.taxonomy_root_radius_m.get(root, TAX_CFG.default_radius_m))
+
+
+def _ui_tax(root: str) -> str:
+    """Keep original root; only alias lodging/health_care for the 3 main chips."""
+    return UI_ALIAS.get(root, root)
+
+
+def _load_geopandas(path: Path, min_confidence: float):
     import geopandas as gpd
     import pandas as pd
 
     gdf = gpd.read_file(path)
     if "taxonomy_root" not in gdf.columns:
-        raise ValueError("GeoJSON missing taxonomy_root column")
+        raise ValueError("GeoJSON missing taxonomy_root")
 
     roots_all = sorted(gdf["taxonomy_root"].dropna().astype(str).unique().tolist())
 
+    gdf = gdf.copy()
     if "confidence" in gdf.columns:
-        gdf = gdf.copy()
         gdf["confidence"] = pd.to_numeric(gdf["confidence"], errors="coerce").fillna(0.0)
         gdf = gdf[gdf["confidence"] >= min_confidence]
-
-    # lon/lat from geometry (Point → x/y; others → representative_point)
-    gdf = gdf[gdf.geometry.notna()].copy()
+    gdf = gdf[gdf.geometry.notna()]
 
     def _xy(geom):
         if geom is None or geom.is_empty:
@@ -80,19 +93,13 @@ def _load_candidates_geopandas(path: Path, min_confidence: float):
     gdf["lat"] = [t[1] for t in xy]
     gdf = gdf[gdf["lng"].notna()]
 
-    by_tax: dict[str, list[dict[str, Any]]] = {
-        "food_and_drink": [],
-        "accommodation": [],
-        "health_and_medicine": [],
-    }
-    counts_full: dict[str, int] = {k: 0 for k in by_tax}
+    by_root: dict[str, list[dict[str, Any]]] = {}
+    counts_full: dict[str, int] = {}
 
     for _, row in gdf.iterrows():
         root = str(row.get("taxonomy_root") or "")
-        if root not in TAXONOMY_MAP:
+        if not root:
             continue
-        ui_tax = TAXONOMY_MAP[root]
-        counts_full[ui_tax] = counts_full.get(ui_tax, 0) + 1
         conf = float(row.get("confidence") or 0.0)
         name = row.get("names") or "Unnamed"
         if not isinstance(name, str):
@@ -101,57 +108,52 @@ def _load_candidates_geopandas(path: Path, min_confidence: float):
         addr = row.get("address_freeform") or ""
         if not isinstance(addr, str):
             addr = ""
-        by_tax[ui_tax].append(
-            {
-                "id": str(row.get("id") or "")[:36],
-                "name": name,
-                "taxonomy": ui_tax,
-                "taxonomy_root": root,
-                "confidence": round(conf, 4),
-                "lng": float(row["lng"]),
-                "lat": float(row["lat"]),
-                "address": addr[:60],
-                "primary": str(row.get("taxonomy_primary") or row.get("basic_category") or ""),
-            }
-        )
 
-    return by_tax, counts_full, roots_all
+        item = {
+            "id": str(row.get("id") or "")[:36],
+            "name": name,
+            "taxonomy": _ui_tax(root),
+            "taxonomy_root": root,
+            "confidence": round(conf, 4),
+            "weight": _weight(root),
+            "radius_m": _radius_m(root),
+            "lng": float(row["lng"]),
+            "lat": float(row["lat"]),
+            "address": addr[:60],
+            "primary": str(row.get("taxonomy_primary") or row.get("basic_category") or ""),
+        }
+        by_root.setdefault(root, []).append(item)
+        counts_full[root] = counts_full.get(root, 0) + 1
+
+    return by_root, counts_full, roots_all
 
 
-def _load_candidates_json(path: Path, min_confidence: float):
-    """Fallback without geopandas — pure JSON FeatureCollection."""
+def _load_json(path: Path, min_confidence: float):
     with path.open(encoding="utf-8") as f:
         fc = json.load(f)
 
+    by_root: dict[str, list[dict[str, Any]]] = {}
+    counts_full: dict[str, int] = {}
     roots_set: set[str] = set()
-    by_tax: dict[str, list[dict[str, Any]]] = {
-        "food_and_drink": [],
-        "accommodation": [],
-        "health_and_medicine": [],
-    }
-    counts_full: dict[str, int] = {k: 0 for k in by_tax}
 
     for feat in fc.get("features") or []:
         props = feat.get("properties") or {}
         root = props.get("taxonomy_root")
-        if root:
-            roots_set.add(str(root))
-        if root not in TAXONOMY_MAP:
+        if not root:
             continue
-        ui_tax = TAXONOMY_MAP[root]
+        root = str(root)
+        roots_set.add(root)
         try:
             conf = float(props.get("confidence") or 0.0)
         except (TypeError, ValueError):
             conf = 0.0
         if conf < min_confidence:
             continue
-        counts_full[ui_tax] = counts_full.get(ui_tax, 0) + 1
         geom = feat.get("geometry") or {}
         coords = geom.get("coordinates") or [None, None]
-        if geom.get("type") == "Point":
+        lng = lat = None
+        if geom.get("type") == "Point" and len(coords) >= 2:
             lng, lat = coords[0], coords[1]
-        else:
-            lng = lat = None
         name = props.get("names") or "Unnamed"
         if not isinstance(name, str):
             name = str(name)
@@ -159,21 +161,23 @@ def _load_candidates_json(path: Path, min_confidence: float):
         addr = props.get("address_freeform") or ""
         if not isinstance(addr, str):
             addr = ""
-        by_tax[ui_tax].append(
-            {
-                "id": str(props.get("id") or "")[:36],
-                "name": name,
-                "taxonomy": ui_tax,
-                "taxonomy_root": root,
-                "confidence": round(conf, 4),
-                "lng": lng,
-                "lat": lat,
-                "address": addr[:60],
-                "primary": props.get("taxonomy_primary") or props.get("basic_category") or "",
-            }
-        )
+        item = {
+            "id": str(props.get("id") or "")[:36],
+            "name": name,
+            "taxonomy": _ui_tax(root),
+            "taxonomy_root": root,
+            "confidence": round(conf, 4),
+            "weight": _weight(root),
+            "radius_m": _radius_m(root),
+            "lng": lng,
+            "lat": lat,
+            "address": addr[:60],
+            "primary": props.get("taxonomy_primary") or props.get("basic_category") or "",
+        }
+        by_root.setdefault(root, []).append(item)
+        counts_full[root] = counts_full.get(root, 0) + 1
 
-    return by_tax, counts_full, sorted(roots_set)
+    return by_root, counts_full, sorted(roots_set)
 
 
 @app.get("/", include_in_schema=False)
@@ -191,9 +195,6 @@ async def health() -> dict[str, Any]:
     path = _resolve_geojson()
     return {
         "status": "ok",
-        "frontend": str(FRONTEND_DIR),
-        "index_exists": (TEMPLE_DIR / "index.html").is_file(),
-        "runner_exists": RUNNER_HTML.is_file(),
         "geojson_exists": path is not None,
         "geojson_path": str(path) if path else None,
         "routes": {"landing": "/", "runner": "/run", "candidates": "/api/candidates"},
@@ -202,41 +203,37 @@ async def health() -> dict[str, Any]:
 
 @app.get("/api/candidates")
 async def api_candidates(
-    per_tax: int = Query(40, ge=1, le=200, description="Max candidates per UI taxonomy chip"),
-    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    per_tax: int = Query(40, ge=1, le=200, description="Max candidates per taxonomy_root"),
+    min_confidence: float | None = Query(
+        None, ge=0.0, le=1.0, description="Override taxonomy_config.min_confidence"
+    ),
 ) -> JSONResponse:
-    """Fill runner candidate grid from real GeoJSON via geopandas.
+    """Load places from Clean GeoJSON; attach weight/radius from taxonomy_config.
 
-    Source (preferred):
-      data/Xuanhuongward/XuanHuongWarsFeaturesClean.geojson
-    taxonomy_root unique: food_and_drink, lodging, health_care, shopping, …
-    UI maps: lodging→accommodation, health_care→health_and_medicine.
+    Does NOT filter to a 3-item whitelist — every taxonomy_root in the file is returned
+    (top-N by confidence per root). Weights update p_i before the solver runs.
     """
     path = _resolve_geojson()
     if path is None:
         return JSONResponse(
             status_code=404,
-            content={
-                "error": "GeoJSON not found",
-                "tried": [str(CLEAN_GEOJSON), str(FEATURED_GEOJSON)],
-            },
+            content={"error": "GeoJSON not found", "tried": [str(CLEAN_GEOJSON), str(FEATURED_GEOJSON)]},
         )
+
+    conf_cut = TAX_CFG.min_confidence if min_confidence is None else min_confidence
 
     try:
         try:
-            by_tax, counts_full, roots_all = _load_candidates_geopandas(path, min_confidence)
+            by_root, counts_full, roots_all = _load_geopandas(path, conf_cut)
             engine = "geopandas"
         except ImportError:
-            by_tax, counts_full, roots_all = _load_candidates_json(path, min_confidence)
+            by_root, counts_full, roots_all = _load_json(path, conf_cut)
             engine = "json"
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(exc), "path": str(path)},
-        )
+        return JSONResponse(status_code=500, content={"error": str(exc), "path": str(path)})
 
     candidates: list[dict[str, Any]] = []
-    for tax, items in by_tax.items():
+    for root, items in by_root.items():
         items.sort(key=lambda x: -x["confidence"])
         candidates.extend(items[:per_tax])
 
@@ -247,15 +244,16 @@ async def api_candidates(
         content={
             "source": str(path.relative_to(ROOT_DIR)) if str(path).startswith(str(ROOT_DIR)) else str(path),
             "engine": engine,
-            "taxonomy_map": TAXONOMY_MAP,
+            "min_confidence": conf_cut,
             "taxonomy_root_unique": roots_all,
+            "taxonomy_weights": dict(TAX_CFG.taxonomy_root_weight),
+            "taxonomy_radius_m": dict(TAX_CFG.taxonomy_root_radius_m),
             "counts_full": counts_full,
             "candidates": candidates,
         }
     )
 
 
-# Static mounts
 if ASSET_DIR.is_dir():
     app.mount("/asset", StaticFiles(directory=str(ASSET_DIR)), name="asset")
 if STATIC_DIR.is_dir():

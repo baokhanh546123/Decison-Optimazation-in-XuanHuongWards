@@ -1,231 +1,201 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>MCLP Runner — Đà Lạt</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0d1512;--panel:#121c17;--border:#263a30;--text:#e7eae2;--muted:#8ea092;--faint:#5c6d62;--gold:#d4a24e;--green:#5b9279}
-body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:14px;line-height:1.6}
-.topbar{display:flex;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:rgba(13,21,18,.9);position:sticky;top:0;z-index:10}
-.brand{font-family:'Space Grotesk',sans-serif;font-weight:600}
-.wrap{max-width:1100px;margin:0 auto;padding:24px}
-h1{font-family:'Space Grotesk',sans-serif;font-size:24px;margin-bottom:8px}
-.lede{color:var(--muted);margin-bottom:24px;font-size:13px}
-.panel{border:1px solid var(--border);border-radius:8px;background:var(--panel);padding:20px;margin-bottom:16px}
-.panel h3{font-family:'Space Grotesk',sans-serif;font-size:15px;margin-bottom:6px}
-.panel p.hint{color:var(--muted);font-size:12px;margin-bottom:14px}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.chip{padding:5px 12px;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--muted);background:transparent;cursor:pointer}
-.chip.is-active{border-color:var(--gold);color:var(--gold);background:rgba(212,162,78,.1)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-height:360px;overflow:auto}
-.card{border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;background:#16221b;transition:.15s}
-.card:hover{border-color:var(--muted);transform:translateY(-2px)}
-.card.is-selected{border-color:var(--gold);background:rgba(212,162,78,.08)}
-.card .id{font-size:11px;color:var(--faint)}
-.card .name{font-family:'Space Grotesk',sans-serif;font-size:13px;margin:6px 0}
-.card .meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
-.count{font-size:12px;color:var(--faint);margin-bottom:10px}
-.count b{color:var(--gold)}
-.radius-box .row{margin-bottom:12px}
-.radius-box label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px}
-.radius-box label b{color:var(--gold)}
-input[type=range]{width:100%;accent-color:var(--gold)}
-.note{font-size:11px;color:var(--faint);margin-bottom:10px}
-.btn{background:var(--gold);color:#1a1206;border:none;padding:10px 18px;border-radius:6px;font-weight:600;cursor:pointer;font-family:inherit}
-.btn:hover{background:#e3b568}
-.status{font-size:12px;color:var(--muted);margin-top:12px}
-</style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCLP Runner — Đà Lạt · Grok</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<link rel="stylesheet" href="/static/runner_page.css" />
 </head>
 <body>
-<div class="topbar"><div class="brand">● MCLP Runner · Xuan Huong</div><div style="color:var(--faint);font-size:12px">RedirectResponse target · /temple/runner.html</div></div>
-<div class="wrap">
-  <h1>Decision Optimization — Candidate & Radius</h1>
-  <p class="lede">Trang đích của <code>GET /run</code>. Candidate thật từ <code>/static/candidates.json</code> (main.py / GeoJSON). Chọn cell → chỉnh bán kính theo taxonomy.</p>
 
-  <div class="panel">
-    <h3>Bước 1 — Chọn candidate</h3>
-    <p class="hint">Click card để chọn / bỏ chọn. Lọc theo taxonomy.</p>
-    <div class="chips" id="chips"><button class="chip is-active" data-f="all">Tất cả</button></div>
-    <div class="count">Đã chọn: <b id="sel">0</b> / <span id="vis">0</span></div>
-    <div class="grid" id="grid"><div class="note">Đang tải candidates…</div></div>
-  </div>
+<!-- Custom cursor -->
+<div id="custom-cursor"></div>
+<div id="cursor-follower"></div>
 
-  <div class="panel radius-box">
-    <h3>Bước 2 — Bán kính theo taxonomy (m)</h3>
-    <p class="note" id="rad-note">Chọn candidate ở Bước 1 để hiện slider bán kính theo từng taxonomy.</p>
-    <div id="rad-fields"></div>
-  </div>
+<div id="three-bg"></div>
 
-  <div class="panel">
-    <h3>Tóm tắt</h3>
-    <p class="status" id="summary">Candidate: 0 · Radius: —</p>
-    <button class="btn" id="btn-run" type="button">Chạy tối ưu (ε-constraint)</button>
-  </div>
+<div class="topbar" id="topbar">
+  <div class="topbar__brand"><span class="topbar__dot"></span>MCLP&nbsp;Runner</div>
+  <div class="topbar__coords">Phường 10 · Đà Lạt&nbsp;&nbsp;<span>108.46545, 11.92173</span></div>
 </div>
-<script>
-(function () {
-  var candidates = [];
-  var selected = new Set();
-  var activeFilter = "all";
-  var radiusByTax = {};
-  window.candidates = candidates;
 
-  function taxDot(t) {
-    if (/health|education|community|government/i.test(t)) return "#b5602e";
-    if (/lodg|accom|travel/i.test(t)) return "#6e8a93";
-    return "#d4a24e";
-  }
+<section class="hero">
+  <div class="container hero__inner">
+    <p class="hero__eyebrow">Decision Optimization · <b>MO-MCLP</b> · food_and_drink / accommodation / health_and_medicine</p>
+    <h1>Chọn candidate, khoanh vùng phủ,<br /><em>đưa ra Pareto front.</em></h1>
+    <p class="lede">
+      4 bước: chọn candidate → chỉnh threshold riêng → đặt tham số toàn cục → xem Pareto front.
+      Kéo slider, hover, click — con trỏ tùy chỉnh phản hồi theo từng vùng tương tác.
+    </p>
+  </div>
+</section>
 
-  function rebuildChips(chips) {
-    var el = document.getElementById("chips");
-    var h = '<button class="chip' + (activeFilter === "all" ? " is-active" : "") + '" data-f="all">Tất cả</button>';
-    (chips || []).forEach(function (t) {
-      h += '<button class="chip' + (activeFilter === t ? " is-active" : "") + '" data-f="' + t + '">' + t + "</button>";
-    });
-    el.innerHTML = h;
-    el.querySelectorAll(".chip").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        activeFilter = btn.getAttribute("data-f");
-        el.querySelectorAll(".chip").forEach(function (c) { c.classList.toggle("is-active", c === btn); });
-        renderGrid();
-      });
-    });
-  }
+<main class="container wizard">
+  <div class="wizard__card" id="wizard-card">
 
-  function syncRadius() {
-    var box = document.getElementById("rad-fields");
-    var note = document.getElementById("rad-note");
-    var taxSet = {};
-    selected.forEach(function (id) {
-      var c = candidates.find(function (x) { return x.id === id; });
-      if (!c) return;
-      var tax = c.taxonomy || c.taxonomy_root;
-      if (!tax) return;
-      if (taxSet[tax] == null) taxSet[tax] = c.radius_m != null ? Number(c.radius_m) : (radiusByTax[tax] || 500);
-    });
-    var taxes = Object.keys(taxSet).sort();
-    if (!taxes.length) {
-      box.innerHTML = "";
-      note.textContent = "Chọn candidate ở Bước 1 để hiện slider bán kính theo từng taxonomy.";
-      updateSummary();
-      return;
-    }
-    note.textContent = "Mỗi taxonomy có bán kính riêng (từ candidate.radius_m / taxonomy_config) — kéo để điều chỉnh.";
-    box.innerHTML = taxes.map(function (t) {
-      var v = radiusByTax[t] != null ? radiusByTax[t] : taxSet[t];
-      radiusByTax[t] = v;
-      return '<div class="row"><label><span>' + t + '</span><b id="rv-' + t + '">' + v + ' m</b></label>' +
-        '<input type="range" min="50" max="1500" step="10" value="' + v + '" data-tax="' + t + '"/></div>';
-    }).join("");
-    box.querySelectorAll("input[type=range]").forEach(function (inp) {
-      inp.addEventListener("input", function () {
-        var t = inp.getAttribute("data-tax");
-        radiusByTax[t] = Number(inp.value);
-        var lab = document.getElementById("rv-" + t);
-        if (lab) lab.textContent = inp.value + " m";
-        updateSummary();
-      });
-    });
-    updateSummary();
-  }
+    <div class="stepper" id="stepper">
+      <div class="stepper__item" data-step="1">
+        <span class="stepper__circle">1</span><span class="stepper__label">Candidate</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="2">
+        <span class="stepper__circle">2</span><span class="stepper__label">Threshold</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="3">
+        <span class="stepper__circle">3</span><span class="stepper__label">Tham số</span>
+      </div>
+      <div class="stepper__line"></div>
+      <div class="stepper__item" data-step="4">
+        <span class="stepper__circle">4</span><span class="stepper__label">Kết quả</span>
+      </div>
+    </div>
 
-  function renderGrid() {
-    var grid = document.getElementById("grid");
-    var vis = candidates.filter(function (c) {
-      return activeFilter === "all" || c.taxonomy === activeFilter;
-    });
-    document.getElementById("vis").textContent = vis.length;
-    document.getElementById("sel").textContent = selected.size;
-    if (!vis.length) {
-      grid.innerHTML = '<div class="note">Không có candidate (filter / file trống).</div>';
-      return;
-    }
-    grid.innerHTML = "";
-    vis.forEach(function (c) {
-      var card = document.createElement("div");
-      card.className = "card" + (selected.has(c.id) ? " is-selected" : "");
-      card.innerHTML =
-        '<div class="id">' + c.id + '</div>' +
-        '<div class="name">' + (c.name || "—") + "</div>" +
-        '<div class="meta"><span style="color:' + taxDot(c.taxonomy) + '">' + (c.taxonomy || "") +
-        '</span><span>conf ' + (c.confidence != null ? c.confidence : "—") + "</span></div>";
-      card.addEventListener("click", function () {
-        if (selected.has(c.id)) selected.delete(c.id); else selected.add(c.id);
-        renderGrid();
-        syncRadius();
-      });
-      grid.appendChild(card);
-    });
-  }
+    <div class="wizard__body" id="wizard-body">
 
-  function updateSummary() {
-    var rs = Object.keys(radiusByTax).map(function (t) { return radiusByTax[t]; });
-    var rtxt = rs.length ? (Math.min.apply(null, rs) + "–" + Math.max.apply(null, rs) + " m") : "—";
-    document.getElementById("summary").textContent =
-      "Candidate: " + selected.size + " · Radius: " + rtxt +
-      " · Taxonomy: " + (Object.keys(radiusByTax).join(", ") || "—");
-  }
+      <!-- PANE 1 -->
+      <div class="wizard__pane is-active" data-pane="1">
+        <div class="pane__head">
+          <h3>Chọn candidate</h3>
+          <p>Click để chọn / bỏ chọn. Lọc theo taxonomy nếu cần.</p>
+        </div>
+        <div class="toolbar">
+          <div class="filter-group" id="filter-group">
+            <button class="chip is-active" data-filter="all">Tất cả</button>
+            <button class="chip" data-filter="food_and_drink"><span class="chip__dot dot-food"></span>food_and_drink</button>
+            <button class="chip" data-filter="accommodation"><span class="chip__dot dot-stay"></span>accommodation</button>
+            <button class="chip" data-filter="health_and_medicine"><span class="chip__dot dot-health"></span>health_and_medicine</button>
+          </div>
+          <div class="select-count">Đã chọn: <b id="selected-count">0</b> / <span id="visible-count">0</span> candidate</div>
+        </div>
+        <div class="candidate-grid" id="candidate-grid"></div>
+      </div>
 
-  function applyList(list) {
-    candidates.length = 0;
-    list.forEach(function (c, i) {
-      candidates.push({
-        id: c.uid || c.id || ("C-" + String(i + 1).padStart(3, "0")),
-        name: c.name || "Unnamed",
-        taxonomy: c.taxonomy || c.taxonomy_root || "other",
-        taxonomy_root: c.taxonomy_root || c.taxonomy,
-        confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : "0.00",
-        lat: c.lat, lng: c.lng,
-        weight: c.weight,
-        radius_m: c.radius_m != null ? Number(c.radius_m) : 500
-      });
-    });
-    var chips = [];
-    var seen = {};
-    candidates.forEach(function (c) {
-      if (c.taxonomy && !seen[c.taxonomy]) { seen[c.taxonomy] = 1; chips.push(c.taxonomy); }
-    });
-    rebuildChips(chips.sort());
-    renderGrid();
-    syncRadius();
-  }
+      <!-- PANE 2 -->
+      <div class="wizard__pane" data-pane="2">
+        <div class="pane__head">
+          <h3>Điều chỉnh threshold theo candidate</h3>
+          <p>Kéo slider — thumb phát sáng, track đổ đầy, giá trị nhảy nhẹ khi thay đổi.</p>
+        </div>
+        <div class="threshold-list" id="threshold-list">
+          <div class="empty-state" id="threshold-empty">
+            Chưa có candidate nào được chọn. Quay lại <b>Bước 1</b> để chọn ít nhất một vị trí.
+          </div>
+        </div>
+      </div>
 
-  function load() {
-    var urls = ["/static/candidates.json", "/static/candidates_xuanhuong.json", "/api/candidates?per_tax=40"];
-    function tryUrl(i) {
-      if (i >= urls.length) {
-        document.getElementById("grid").innerHTML =
-          '<div class="note"><b>Không tải được candidates.</b> Kiểm tra /static/candidates.json hoặc GET /api/candidates</div>';
-        return;
-      }
-      fetch(urls[i]).then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      }).then(function (payload) {
-        var list = (payload && payload.candidates) ? payload.candidates : [];
-        console.info("[runner] loaded", urls[i], "n=", list.length);
-        applyList(list);
-      }).catch(function () { tryUrl(i + 1); });
-    }
-    tryUrl(0);
-  }
+      <!-- PANE 3 -->
+      <div class="wizard__pane" data-pane="3">
+        <div class="pane__head">
+          <h3>Tham số toàn cục</h3>
+          <p>Bán kính phủ theo taxonomy, confidence, P_max và tỷ trọng đánh đổi giữa hai mục tiêu.</p>
+        </div>
 
-  document.getElementById("btn-run").addEventListener("click", function () {
-    var payload = {
-      selected: Array.from(selected),
-      radius_by_taxonomy: radiusByTax,
-      candidates: candidates.filter(function (c) { return selected.has(c.id); })
-    };
-    console.info("[run]", payload);
-    alert("Đã chọn " + selected.size + " candidate.\nRadius: " + JSON.stringify(radiusByTax) +
-      "\n(Nối solver ε-constraint qua API khi sẵn sàng)");
-  });
+        <div class="panel">
+          <p class="panel__title">Bán kính phủ theo taxonomy (mét)</p>
+          <div class="params-grid">
+            <div class="field">
+              <div class="field__label"><span class="chip__dot dot-food"></span>&nbsp;food_and_drink<b id="val-radius-food">150 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-food"></div><input type="range" id="radius-food" min="50" max="500" step="10" value="150" /></div>
+            </div>
+            <div class="field">
+              <div class="field__label"><span class="chip__dot dot-stay"></span>&nbsp;accommodation<b id="val-radius-stay">300 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-stay"></div><input type="range" id="radius-stay" min="100" max="800" step="10" value="300" /></div>
+            </div>
+            <div class="field field--full">
+              <div class="field__label"><span class="chip__dot dot-health"></span>&nbsp;health_and_medicine<b id="val-radius-health">400 m</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-health"></div><input type="range" id="radius-health" min="200" max="1000" step="10" value="400" /></div>
+            </div>
+          </div>
+        </div>
 
-  load();
-})();
-</script>
+        <div class="panel">
+          <p class="panel__title">Confidence & ngân sách</p>
+          <div class="params-grid">
+            <div class="field">
+              <div class="field__label">Confidence tối thiểu (toàn cục)<b id="val-confidence">0.75</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-confidence"></div><input type="range" id="confidence" min="0" max="1" step="0.01" value="0.75" /></div>
+            </div>
+            <div class="field">
+              <div class="field__label">Số cơ sở tối đa — P_max</div>
+              <input type="number" id="pmax" value="8" min="1" max="50" />
+            </div>
+            <div class="field field--full">
+              <div class="field__label">Số điểm epsilon trong sweep<b id="val-epsilon">12</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-epsilon"></div><input type="range" id="epsilon-steps" min="4" max="30" step="1" value="12" /></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Trọng số mục tiêu (λ₁ · λ₂)</p>
+          <div class="field balance">
+            <div class="slider-wrap"><div class="slider-fill" id="fill-balance"></div><input type="range" id="balance" min="0" max="100" value="55" /></div>
+            <div class="balance__labels">
+              <span><em>Max covering profit</em> — f₁</span>
+              <span id="balance-readout">55 / 45</span>
+              <span><em class="right">Min cost</em> — f₂</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="runbar">
+          <div class="runbar__summary">
+            <span>Candidate: <b id="sum-candidates">0</b></span>
+            <span>Radius: <b id="sum-radius">150–400 m</b></span>
+            <span>Confidence ≥ <b id="sum-confidence">0.75</b></span>
+            <span>P_max: <b id="sum-pmax">8</b></span>
+          </div>
+          <button class="btn-run" id="btn-run">Chạy tối ưu (ε-constraint sweep)</button>
+        </div>
+
+        <div class="pipeline" id="pipeline">
+          <div class="pipeline__track"><div class="pipeline__fill" id="pipeline-fill"></div></div>
+          <p class="pipeline__stage"><b id="pipeline-stage">—</b></p>
+        </div>
+      </div>
+
+      <!-- PANE 4 -->
+      <div class="wizard__pane" data-pane="4">
+        <div class="pane__head">
+          <h3>Pareto front</h3>
+          <p>Tập nghiệm không trội từ epsilon-constraint sweep.</p>
+        </div>
+        <div class="results__grid">
+          <canvas id="pareto-canvas"></canvas>
+          <div class="results__stats">
+            <div class="stat-line"><span>Điểm Pareto tìm được</span><b id="stat-points">—</b></div>
+            <div class="stat-line"><span>Optimality gap trung bình</span><b id="stat-gap">—</b></div>
+            <div class="stat-line"><span>Điểm bị gắn cờ non-monotonic</span><b class="warn" id="stat-flagged">—</b></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="wizard__nav">
+      <button class="btn-ghost" id="btn-back">← Quay lại</button>
+      <span class="wizard__hint" id="wizard-hint"></span>
+      <button class="btn-next" id="btn-next">Tiếp tục →</button>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      Candidate thật từ <code>/static/candidates.json</code> hoặc <code>GET /api/candidates</code> (main.py).
+      Nút "Chạy tối ưu" gọi <code>epsilon_constraint_sweep</code> trên OR-Tools CP-SAT khi nối backend.
+    </p>
+  </div>
+</footer>
+
+<script src="/js/runner_page.js"></script>
 </body>
 </html>

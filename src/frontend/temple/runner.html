@@ -17,83 +17,235 @@
     "https://raw.githubusercontent.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards/main/src/frontend/temple/runner.html";
 
   function patch(html) {
+    if (html.indexOf(".guide-box") < 0) {
+      html = html.replace(
+        "</style>",
+        "\n.guide-box{margin:12px 0 18px;padding:12px 14px;border:1px solid var(--border);" +
+          "border-radius:var(--radius-md);background:rgba(212,162,78,0.04);font-size:12.5px;" +
+          "color:var(--text-muted);line-height:1.65}" +
+          ".guide-box b{color:var(--gold);font-weight:600}" +
+          ".guide-box ol,.guide-box ul{margin:6px 0 0 1.1rem;padding:0}" +
+          ".guide-box li{margin:3px 0}" +
+          ".guide-box code{color:var(--gold);font-size:11px}" +
+          ".radius-dynamic-note{font-size:11.5px;color:var(--text-faint);margin:0 0 10px}" +
+          "\n</style>"
+      );
+    }
+
+    function replacePane(paneAttr, title, lead, guideHtml) {
+      var re = new RegExp(
+        "(<div class=\"wizard__pane[^\"]*\" " + paneAttr + ">\\s*<div class=\"pane__head\">)[\\s\\S]*?(</div>)",
+        "m"
+      );
+      html = html.replace(re, function (_m, open, close) {
+        return open + "\n          <h3>" + title + "</h3>\n          <p>" + lead + "</p>\n        " + close +
+          "\n        <div class=\"guide-box\">\n" + guideHtml + "\n        </div>";
+      });
+    }
+
+    replacePane('data-pane="1"',
+      "Bước 1 — Chọn candidate",
+      "Chọn các điểm ứng viên đưa vào mô hình MCLP. Dữ liệu từ GeoJSON thật (taxonomy_root + confidence).",
+      "          <b>Hướng dẫn nhanh</b>\n          <ol>\n" +
+      "            <li>Lọc theo taxonomy (chip) hoặc chọn <b>Tất cả</b>.</li>\n" +
+      "            <li>Click thẻ candidate để <b>chọn / bỏ chọn</b>.</li>\n" +
+      "            <li>Cần ít nhất <b>1 candidate</b> trước khi sang bước Threshold.</li>\n" +
+      "            <li>Mỗi candidate có <code>weight</code> (pᵢ) và <code>radius_m</code> từ <code>taxonomy_config</code>.</li>\n" +
+      "          </ol>");
+
+    replacePane('data-pane="2"',
+      "Bước 2 — Threshold theo candidate",
+      "Điều chỉnh demand-weight và confidence tối thiểu riêng cho từng candidate đã chọn.",
+      "          <b>Hướng dẫn nhanh</b>\n          <ol>\n" +
+      "            <li><b>Demand-weight</b>: mức ưu tiên nhu cầu tại điểm (0 → 1).</li>\n" +
+      "            <li><b>Confidence tối thiểu</b>: lọc điểm kém tin cậy khỏi ràng buộc phủ.</li>\n" +
+      "            <li>Mặc định lấy confidence gốc từ GeoJSON.</li>\n" +
+      "            <li>Danh sách trống → quay lại Bước 1.</li>\n" +
+      "          </ol>");
+
+    replacePane('data-pane="3"',
+      "Bước 3 — Tham số toàn cục",
+      "Bán kính phủ, confidence, P_max và tỷ trọng f₁/f₂. Bán kính tự cập nhật theo taxonomy candidate đã chọn.",
+      "          <b>Hướng dẫn nhanh</b>\n          <ol>\n" +
+      "            <li><b>Bán kính phủ</b>: chỉ hiện taxonomy có trong tập đã chọn; mặc định = radius_m từ taxonomy_config.</li>\n" +
+      "            <li><b>Min confidence</b>: ngưỡng toàn cục (mặc định 0.3).</li>\n" +
+      "            <li><b>P_max</b>: số facility tối đa.</li>\n" +
+      "            <li><b>λ₁ / λ₂</b>: cân bằng Max covering profit (f₁) và Min cost (f₂).</li>\n" +
+      "            <li>Bấm <b>Chạy tối ưu</b> → ε-constraint → Pareto ở Bước 4.</li>\n" +
+      "          </ol>");
+
+    replacePane('data-pane="4"',
+      "Bước 4 — Pareto front",
+      "Tập nghiệm không bị trội giữa độ phủ (f₁) và chi phí (f₂).",
+      "          <b>Cách đọc kết quả</b>\n          <ul>\n" +
+      "            <li>Trục ngang: <b>f₂ — cost</b> (càng phải càng đắt).</li>\n" +
+      "            <li>Trục dọc: <b>f₁ — coverage</b> (càng cao càng phủ nhiều).</li>\n" +
+      "            <li>Mỗi điểm = một phương án ε. Chọn điểm phù hợp chiến lược.</li>\n" +
+      "            <li>Điểm gắn cờ: non-monotonic / cần kiểm tra lại solver.</li>\n" +
+      "          </ul>");
+
+    var ti = html.indexOf("Bán kính phủ theo taxonomy");
+    if (ti >= 0) {
+      var panelOpen = html.lastIndexOf('<div class="panel">', ti);
+      var nextPanel = html.indexOf('<div class="panel">', ti + 10);
+      if (panelOpen >= 0 && nextPanel > ti) {
+        var newPanel =
+          '<div class="panel" id="panel-radius">\n' +
+          '          <p class="panel__title">Bán kính phủ theo taxonomy đã chọn (mét)</p>\n' +
+          '          <p class="radius-dynamic-note" id="radius-dynamic-note">Chưa chọn candidate — chọn ở Bước 1 để hiện slider.</p>\n' +
+          '          <div id="radius-fields"></div>\n' +
+          '        </div>\n\n        ';
+        html = html.slice(0, panelOpen) + newPanel + html.slice(nextPanel);
+      }
+    }
+
     var a = html.indexOf("  var TAX = {");
     var b = html.indexOf("  var selected = new Set();");
     if (a >= 0 && b > a) {
-      var block =
-        "  var TAX = {};\n" +
-        "  function taxMeta(tax) {\n" +
-        "    if (TAX[tax]) return TAX[tax];\n" +
-        "    var dot = 'dot-food';\n" +
-        "    if (/health|education|community|government/i.test(tax)) dot = 'dot-health';\n" +
-        "    else if (/lodg|accom|travel/i.test(tax)) dot = 'dot-stay';\n" +
-        "    TAX[tax] = { label: tax, dot: dot };\n" +
-        "    return TAX[tax];\n" +
-        "  }\n" +
-        "  var candidates = [];\n" +
-        "  window.candidates = candidates;\n\n" +
-        "  function rebuildChips(chips) {\n" +
-        "    var fg = document.getElementById('filter-group');\n" +
-        "    if (!fg || !chips || !chips.length) return;\n" +
-        "    var active = (fg.querySelector('.chip.is-active') || {}).dataset;\n" +
-        "    var cur = active && active.filter ? active.filter : 'all';\n" +
-        "    var html = '<button class=\"chip' + (cur === 'all' ? ' is-active' : '') + '\" data-filter=\"all\">Tất cả</button>';\n" +
-        "    chips.forEach(function (t) {\n" +
-        "      var m = taxMeta(t);\n" +
-        "      html += '<button class=\"chip' + (cur === t ? ' is-active' : '') + '\" data-filter=\"' + t + '\">' +\n" +
-        "        '<span class=\"chip__dot ' + m.dot + '\"></span>' + m.label + '</button>';\n" +
-        "    });\n" +
-        "    fg.innerHTML = html;\n" +
-        "  }\n" +
-        "  window.rebuildChips = rebuildChips;\n\n";
-      html = html.slice(0, a) + block + html.slice(b);
+      var block = [
+        "  var TAX = {};",
+        "  function taxMeta(tax) {",
+        "    if (TAX[tax]) return TAX[tax];",
+        "    var dot = 'dot-food';",
+        "    if (/health|education|community|government/i.test(tax)) dot = 'dot-health';",
+        "    else if (/lodg|accom|travel/i.test(tax)) dot = 'dot-stay';",
+        "    TAX[tax] = { label: tax, dot: dot };",
+        "    return TAX[tax];",
+        "  }",
+        "  var candidates = [];",
+        "  window.candidates = candidates;",
+        "",
+        "  function rebuildChips(chips) {",
+        "    var fg = document.getElementById('filter-group');",
+        "    if (!fg || !chips || !chips.length) return;",
+        "    var active = (fg.querySelector('.chip.is-active') || {}).dataset;",
+        "    var cur = active && active.filter ? active.filter : 'all';",
+        "    var h = '<button class=\"chip' + (cur === 'all' ? ' is-active' : '') + '\" data-filter=\"all\">Tất cả</button>';",
+        "    chips.forEach(function (t) {",
+        "      var m = taxMeta(t);",
+        "      h += '<button class=\"chip' + (cur === t ? ' is-active' : '') + '\" data-filter=\"' + t + '\">' +",
+        "        '<span class=\"chip__dot ' + m.dot + '\"></span>' + m.label + '</button>';",
+        "    });",
+        "    fg.innerHTML = h;",
+        "  }",
+        "  window.rebuildChips = rebuildChips;",
+        "",
+        "  var radiusByTax = {};",
+        "  function syncRadiusFromSelection() {",
+        "    var box = document.getElementById('radius-fields');",
+        "    var note = document.getElementById('radius-dynamic-note');",
+        "    if (!box) return;",
+        "    var taxSet = {};",
+        "    selected.forEach(function (id) {",
+        "      var c = candidates.find(function (x) { return x.id === id; });",
+        "      if (!c) return;",
+        "      var tax = c.taxonomy || c.taxonomy_root;",
+        "      if (!tax) return;",
+        "      if (taxSet[tax] == null) taxSet[tax] = c.radius_m != null ? Number(c.radius_m) : 500;",
+        "    });",
+        "    var taxes = Object.keys(taxSet).sort();",
+        "    if (!taxes.length) {",
+        "      box.innerHTML = '';",
+        "      if (note) note.textContent = 'Chưa chọn candidate — chọn ở Bước 1 để hiện slider bán kính theo taxonomy.';",
+        "      return;",
+        "    }",
+        "    if (note) note.textContent = 'Mặc định theo taxonomy_config của candidate đã chọn. Kéo slider để tinh chỉnh trước khi chạy solver.';",
+        "    var htm = '';",
+        "    taxes.forEach(function (tax) {",
+        "      var m = taxMeta(tax);",
+        "      var val = radiusByTax[tax] != null ? radiusByTax[tax] : taxSet[tax];",
+        "      radiusByTax[tax] = val;",
+        "      var max = Math.max(1000, Math.ceil(val / 100) * 100 + 200);",
+        "      htm += '<div class=\"field\" data-radius-tax=\"' + tax + '\">' +",
+        "        '<div class=\"field__label\"><span class=\"chip__dot ' + m.dot + '\"></span>&nbsp;' + m.label +",
+        "        '<b class=\"radius-val\">' + val + ' m</b></div>' +",
+        "        '<div class=\"slider-wrap\"><div class=\"slider-fill\" style=\"width:' + ((val / max) * 100) + '%\"></div>' +",
+        "        '<input type=\"range\" class=\"radius-slider\" min=\"50\" max=\"' + max + '\" step=\"10\" value=\"' + val + '\" data-tax=\"' + tax + '\" /></div></div>';",
+        "    });",
+        "    box.innerHTML = htm;
+",
+        "    box.querySelectorAll('.radius-slider').forEach(function (sl) {",
+        "      sl.addEventListener('input', function () {",
+        "        var tax = sl.getAttribute('data-tax');",
+        "        var v = Number(sl.value);",
+        "        radiusByTax[tax] = v;",
+        "        var row = sl.closest('.field');",
+        "        if (row) {",
+        "          var lab = row.querySelector('.radius-val');",
+        "          if (lab) lab.textContent = v + ' m';",
+        "          var fill = row.querySelector('.slider-fill');",
+        "          if (fill) fill.style.width = ((v / Number(sl.max)) * 100) + '%';",
+        "        }",
+        "        if (typeof updateSummary === 'function') updateSummary();",
+        "      });",
+        "    });",
+        "    if (typeof updateSummary === 'function') updateSummary();",
+        "  }",
+        "  window.syncRadiusFromSelection = syncRadiusFromSelection;",
+        ""
+      ].join("\n");
+      html = html.slice(0, a) + block + "\n" + html.slice(b);
     }
 
     html = html.split("TAX[c.taxonomy].dot").join("taxMeta(c.taxonomy).dot");
     html = html.split("TAX[c.taxonomy].label").join("taxMeta(c.taxonomy).label");
+    html = html.split("selectedCountEl.textContent = selected.size;").join(
+      "selectedCountEl.textContent = selected.size;\n    if (typeof syncRadiusFromSelection === 'function') syncRadiusFromSelection();"
+    );
+    html = html.replace(
+      /document\.getElementById\("sum-radius"\)\.textContent = [^;]+;/,
+      'document.getElementById("sum-radius").textContent = (function(){\n' +
+      "      var vals = Object.keys(radiusByTax || {}).map(function(k){ return radiusByTax[k]; });\n" +
+      "      if (!vals.length) return '—';\n" +
+      "      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);\n" +
+      "      return lo === hi ? (lo + ' m') : (lo + '–' + hi + ' m');\n" +
+      "    })();"
+    );
 
-    var inject =
-      "  function applyCandidates(payload) {\n" +
-      "    var list = (payload && payload.candidates) ? payload.candidates : [];\n" +
-      "    candidates.length = 0;\n" +
-      "    list.forEach(function (c, i) {\n" +
-      "      var tax = c.taxonomy || c.taxonomy_root || 'food_and_drink';\n" +
-      "      taxMeta(tax);\n" +
-      "      candidates.push({\n" +
-      "        id: c.uid || ('C-' + String(i + 1).padStart(3, '0')),\n" +
-      "        name: c.name || 'Unnamed',\n" +
-      "        taxonomy: tax,\n" +
-      "        taxonomy_root: c.taxonomy_root || tax,\n" +
-      "        confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : '0.00',\n" +
-      "        weight: c.weight != null ? c.weight : 0.3,\n" +
-      "        radius_m: c.radius_m != null ? c.radius_m : 500,\n" +
-      "        lat: c.lat, lng: c.lng,\n" +
-      "        address: c.address || '',\n" +
-      "        primary: c.primary || ''\n" +
-      "      });\n" +
-      "    });\n" +
-      "    var chips = payload.chips || [];\n" +
-      "    if (!chips.length) {\n" +
-      "      var s = {}; list.forEach(function (c) { s[c.taxonomy || c.taxonomy_root] = 1; });\n" +
-      "      chips = Object.keys(s).sort();\n" +
-      "    }\n" +
-      "    if (typeof rebuildChips === 'function') rebuildChips(chips);\n" +
-      "    renderGrid();\n" +
-      "    if (typeof updateSummary === 'function') updateSummary();\n" +
-      "    if (typeof updateNav === 'function') updateNav();\n" +
-      "  }\n" +
-      "  function loadRealCandidates() {\n" +
-      "    var urls = ['/static/candidates.json', '/static/candidates_xuanhuong.json', '/api/candidates?per_tax=40'];\n" +
-      "    function tryNext(i) {\n" +
-      "      if (i >= urls.length) { console.error('[candidates] all sources failed'); return; }\n" +
-      "      fetch(urls[i]).then(function (r) {\n" +
-      "        if (!r.ok) throw new Error('HTTP ' + r.status);\n" +
-      "        return r.json();\n" +
-      "      }).then(applyCandidates).catch(function () { tryNext(i + 1); });\n" +
-      "    }\n" +
-      "    tryNext(0);\n" +
-      "  }\n" +
-      "  loadRealCandidates();\n";
+    var inject = [
+      "  function applyCandidates(payload) {",
+      "    var list = (payload && payload.candidates) ? payload.candidates : [];",
+      "    candidates.length = 0;",
+      "    list.forEach(function (c, i) {",
+      "      var tax = c.taxonomy || c.taxonomy_root || 'food_and_drink';",
+      "      taxMeta(tax);",
+      "      candidates.push({",
+      "        id: c.uid || ('C-' + String(i + 1).padStart(3, '0')),",
+      "        name: c.name || 'Unnamed',",
+      "        taxonomy: tax,",
+      "        taxonomy_root: c.taxonomy_root || tax,",
+      "        confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : '0.00',",
+      "        weight: c.weight != null ? c.weight : 0.3,",
+      "        radius_m: c.radius_m != null ? c.radius_m : 500,",
+      "        lat: c.lat, lng: c.lng,",
+      "        address: c.address || '',",
+      "        primary: c.primary || ''",
+      "      });",
+      "    });",
+      "    var chips = payload.chips || [];",
+      "    if (!chips.length) {",
+      "      var s = {}; list.forEach(function (c) { s[c.taxonomy || c.taxonomy_root] = 1; });",
+      "      chips = Object.keys(s).sort();",
+      "    }",
+      "    if (typeof rebuildChips === 'function') rebuildChips(chips);",
+      "    renderGrid();",
+      "    if (typeof syncRadiusFromSelection === 'function') syncRadiusFromSelection();",
+      "    if (typeof updateSummary === 'function') updateSummary();",
+      "    if (typeof updateNav === 'function') updateNav();",
+      "  }",
+      "  function loadRealCandidates() {",
+      "    var urls = ['/static/candidates.json', '/static/candidates_xuanhuong.json', '/api/candidates?per_tax=40'];",
+      "    function tryNext(i) {",
+      "      if (i >= urls.length) { console.error('[candidates] all sources failed'); return; }",
+      "      fetch(urls[i]).then(function (r) {",
+      "        if (!r.ok) throw new Error('HTTP ' + r.status);",
+      "        return r.json();",
+      "      }).then(applyCandidates).catch(function () { tryNext(i + 1); });",
+      "    }",
+      "    tryNext(0);",
+      "  }",
+      "  loadRealCandidates();"
+    ].join("\n");
 
     var last = html.lastIndexOf("  renderGrid();");
     if (last >= 0) html = html.slice(0, last) + inject + "\n" + html.slice(last);

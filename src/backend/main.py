@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # backend/main.py → parents[1] = src/; parents[2] = project root
@@ -19,6 +19,7 @@ STATIC_DIR = FRONTEND_DIR / "static"
 JS_DIR = FRONTEND_DIR / "js"
 DATA_DIR = ROOT_DIR / "data"
 FEATURED_GEOJSON = DATA_DIR / "Xuanhuongward" / "Xuan Huong Wards_featured.geojson"
+RUNNER_HTML = TEMPLE_DIR / "runner.html"
 
 # UI taxonomy chips ← GeoJSON taxonomy_root
 TAXONOMY_MAP = {
@@ -28,25 +29,53 @@ TAXONOMY_MAP = {
 }
 
 app = FastAPI(
-    title="MCLP Scrollytelling API",
+    title="MCLP Decision Optimization API",
     description="Backend for Maximal Covering Location Problem — Xuan Huong Wards.",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 
 @app.get("/", include_in_schema=False)
 async def root_redirect() -> RedirectResponse:
+    """Redirect homepage to the scrollytelling landing page."""
     return RedirectResponse(url="/temple/index.html", status_code=302)
+
+
+@app.get("/run", response_class=HTMLResponse, include_in_schema=False)
+async def run_runner() -> FileResponse:
+    """GET /run — serve MCLP Runner UI (runner.html).
+
+    Replaces the old mailto contact CTA: landing page "Tư vấn giải pháp"
+    links here so users open the interactive runner instead of email.
+    """
+    if not RUNNER_HTML.is_file() or RUNNER_HTML.stat().st_size < 100:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "runner.html missing or incomplete. "
+                "Restore src/frontend/temple/runner.html then restart the server."
+            ),
+        )
+    return FileResponse(
+        path=str(RUNNER_HTML),
+        media_type="text/html; charset=utf-8",
+        filename=None,
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    runner_ok = RUNNER_HTML.is_file() and RUNNER_HTML.stat().st_size >= 100
     return {
         "status": "ok",
         "frontend": str(FRONTEND_DIR),
         "index_exists": (TEMPLE_DIR / "index.html").is_file(),
+        "runner_exists": runner_ok,
+        "runner_path": str(RUNNER_HTML),
         "geojson_exists": FEATURED_GEOJSON.is_file(),
         "geojson_path": str(FEATURED_GEOJSON),
+        "routes": {"landing": "/", "runner": "/run", "candidates": "/api/candidates"},
     }
 
 
@@ -124,13 +153,16 @@ async def api_candidates(
     )
 
 
-# Static mounts
+# Static mounts (more specific prefixes)
 if ASSET_DIR.is_dir():
     app.mount("/asset", StaticFiles(directory=str(ASSET_DIR)), name="asset")
+
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 if JS_DIR.is_dir():
     app.mount("/js", StaticFiles(directory=str(JS_DIR)), name="js")
+
 if TEMPLE_DIR.is_dir():
     app.mount("/temple", StaticFiles(directory=str(TEMPLE_DIR), html=True), name="temple")
 

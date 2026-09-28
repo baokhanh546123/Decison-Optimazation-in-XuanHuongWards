@@ -92,21 +92,9 @@
           <p>Bán kính phủ theo taxonomy, confidence, P_max và tỷ trọng đánh đổi giữa hai mục tiêu.</p>
         </div>
         <div class="panel">
-          <p class="panel__title">Bán kính phủ theo taxonomy (mét)</p>
-          <div class="params-grid">
-            <div class="field">
-              <div class="field__label"><span class="chip__dot dot-food"></span>&nbsp;food_and_drink<b id="val-radius-food">150 m</b></div>
-              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-food"></div><input type="range" id="radius-food" min="50" max="500" step="10" value="150" /></div>
-            </div>
-            <div class="field">
-              <div class="field__label"><span class="chip__dot dot-stay"></span>&nbsp;accommodation<b id="val-radius-stay">300 m</b></div>
-              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-stay"></div><input type="range" id="radius-stay" min="100" max="800" step="10" value="300" /></div>
-            </div>
-            <div class="field field--full">
-              <div class="field__label"><span class="chip__dot dot-health"></span>&nbsp;health_and_medicine<b id="val-radius-health">400 m</b></div>
-              <div class="slider-wrap"><div class="slider-fill" id="fill-radius-health"></div><input type="range" id="radius-health" min="200" max="1000" step="10" value="400" /></div>
-            </div>
-          </div>
+          <p class="panel__title">Bán kính phủ &amp; trọng số theo taxonomy_root (chỉ các cell đã chọn)</p>
+          <div class="empty-state" id="tax-empty">Chưa chọn candidate nào — quay lại <b>Bước 1</b>.</div>
+          <div class="tax-list" id="tax-params"></div>
         </div>
         <div class="panel">
           <p class="panel__title">Confidence & ngân sách</p>

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # backend/main.py → parents[1] = src/; parents[2] = project root
@@ -41,27 +41,9 @@ async def root_redirect() -> RedirectResponse:
     return RedirectResponse(url="/temple/index.html", status_code=302)
 
 
-@app.get("/run", response_class=HTMLResponse, include_in_schema=False)
-async def run_runner() -> FileResponse:
-    """GET /run — serve MCLP Runner UI (runner.html).
-
-    Replaces the old mailto contact CTA: landing page "Tư vấn giải pháp"
-    links here so users open the interactive runner instead of email.
-    """
-    if not RUNNER_HTML.is_file() or RUNNER_HTML.stat().st_size < 100:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "runner.html missing or incomplete. "
-                "Restore src/frontend/temple/runner.html then restart the server."
-            ),
-        )
-    return FileResponse(
-        path=str(RUNNER_HTML),
-        media_type="text/html; charset=utf-8",
-        filename=None,
-        headers={"Cache-Control": "no-cache"},
-    )
+@app.get("/run", include_in_schema=False)
+async def run_runner() -> RedirectResponse:
+    return RedirectResponse(url="/temple/runner.html", status_code=302)
 
 
 @app.get("/health")

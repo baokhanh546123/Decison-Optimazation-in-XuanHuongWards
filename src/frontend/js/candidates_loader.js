@@ -1,6 +1,6 @@
 /* Load candidates from real GeoJSON via GET /api/candidates (geopandas backend).
  * Source: data/Xuanhuongward/XuanHuongWarsFeaturesClean.geojson
- * Maps lodging→accommodation, health_care→health_and_medicine.
+ * Nhóm (chip / bán kính / trọng số) lấy trực tiếp từ cột taxonomy_root — không đổi tên alias.
  * Mutates the same `candidates` array used by renderGrid (shared via window.candidates).
  */
 (function () {
@@ -15,7 +15,7 @@
       return {
         id: c.uid || ("C-" + String(i + 1).padStart(3, "0")),
         name: c.name || "Unnamed",
-        taxonomy: c.taxonomy || "food_and_drink",
+        taxonomy: c.taxonomy_root || c.taxonomy || "other",
         taxonomy_root: c.taxonomy_root || c.taxonomy,
         confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : "0.00",
         lat: c.lat,

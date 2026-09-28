@@ -180,10 +180,7 @@
   }
   .chip:hover{ border-color: var(--mist); color: var(--text); }
   .chip.is-active{ border-color: var(--gold); color: var(--gold); background: rgba(212,162,78,0.08); }
-  .chip__dot{ width: 6px; height: 6px; border-radius: 50%; }
-  .dot-food{ background: var(--gold); }
-  .dot-stay{ background: var(--mist); }
-  .dot-health{ background: var(--rust); }
+  .chip__dot{ width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
   .select-count{ font-size: 12.5px; color: var(--text-faint); }
   .select-count b{ color: var(--gold); font-weight: 600; }
 
@@ -316,3 +313,15 @@
   .candidate-grid::-webkit-scrollbar, .threshold-list::-webkit-scrollbar{ width: 6px; }
   .candidate-grid::-webkit-scrollbar-thumb, .threshold-list::-webkit-scrollbar-thumb{ background: var(--border); border-radius: 3px; }
   .wizard__card{ background: rgba(18,28,23,0.92); backdrop-filter: blur(6px); }
+
+  /* [interface] taxonomy_root động ở bước 3 */
+  .tax-list{ display: grid; gap: 12px; max-height: 340px; overflow-y: auto; padding: 0 4px 16px 0; }
+  .tax-card{ border: 1px solid var(--border-soft); border-radius: var(--radius-md); background: var(--bg-panel); padding: 14px 16px 6px; }
+  .tax-card__head{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .tax-card__name{ display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 13.5px; }
+  .tax-card__n{ font-size: 11px; color: var(--text-faint); }
+  #tax-empty{ margin-bottom: 16px; }
+  .tax-list::-webkit-scrollbar{ width: 6px; } .tax-list::-webkit-scrollbar-thumb{ background: var(--border); border-radius: 3px; }
+  .candidate__meta{ gap: 8px; flex-wrap: wrap; }
+  .candidate__conf{ white-space: nowrap; }
+  .threshold-row__name .chip__dot{ margin-right: 5px; }

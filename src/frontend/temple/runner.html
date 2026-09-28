@@ -1,1 +1,35 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCLP Runner — Đà Lạt · Grok</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+/* UI gốc tách: body + CSS + JS (gzip b64). Trang đích RedirectResponse — không xóa nội dung. */
+(function(){
+  function gunzipB64(b64){
+    var bin=atob(b64); var u=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+    return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  }
+  Promise.all([
+    fetch("/static/runner_page.css.b64").then(function(r){ if(!r.ok) throw new Error("css "+r.status); return r.text(); }).then(function(t){ return gunzipB64(t.trim()); }),
+    fetch("/static/runner_page.js.b64").then(function(r){ if(!r.ok) throw new Error("js "+r.status); return r.text(); }).then(function(t){ return gunzipB64(t.trim()); })
+  ]).then(function(parts){
+    var st=document.createElement("style"); st.textContent=parts[0]; document.head.appendChild(st);
+    return fetch("/static/runner_body.html").then(function(r){ if(!r.ok) throw new Error("body "+r.status); return r.text(); }).then(function(bodyHtml){
+      document.body.insertAdjacentHTML("afterbegin", bodyHtml);
+      var s=document.createElement("script"); s.textContent=parts[1]; document.body.appendChild(s);
+    });
+  }).catch(function(e){
+    document.body.innerHTML="<pre style=\"color:#e7eae2;background:#0d1512;padding:2rem\">Lỗi tải runner UI: "+e.message+"</pre>";
+  });
+})();
+</script>
+</head>
+<body style="margin:0;background:#0d1512"></body>
+</html>

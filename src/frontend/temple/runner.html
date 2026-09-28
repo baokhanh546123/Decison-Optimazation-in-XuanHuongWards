@@ -17,78 +17,86 @@
     "https://raw.githubusercontent.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards/main/src/frontend/temple/runner.html";
 
   function patch(html) {
-    /* 1) Replace mock STREETS block — keep TAX/renderGrid/GSAP intact */
     var a = html.indexOf("  var TAX = {");
     var b = html.indexOf("  var selected = new Set();");
     if (a >= 0 && b > a) {
       var block =
-        "  var TAX = {\n" +
-        '    food_and_drink: { label: "food_and_drink", dot: "dot-food" },\n' +
-        '    lodging: { label: "lodging", dot: "dot-stay" },\n' +
-        '    accommodation: { label: "accommodation", dot: "dot-stay" },\n' +
-        '    health_and_medicine: { label: "health_and_medicine", dot: "dot-health" },\n' +
-        '    health_care: { label: "health_care", dot: "dot-health" },\n' +
-        '    arts_and_entertainment: { label: "arts_and_entertainment", dot: "dot-food" },\n' +
-        '    shopping: { label: "shopping", dot: "dot-food" },\n' +
-        '    retail: { label: "retail", dot: "dot-food" },\n' +
-        '    services_and_business: { label: "services_and_business", dot: "dot-food" },\n' +
-        '    lifestyle_services: { label: "lifestyle_services", dot: "dot-food" },\n' +
-        '    travel_and_transportation: { label: "travel_and_transportation", dot: "dot-stay" },\n' +
-        '    sports_and_recreation: { label: "sports_and_recreation", dot: "dot-food" },\n' +
-        '    education: { label: "education", dot: "dot-health" },\n' +
-        '    community_and_government: { label: "community_and_government", dot: "dot-health" },\n' +
-        '    cultural_and_historic: { label: "cultural_and_historic", dot: "dot-food" },\n' +
-        '    geographic_entities: { label: "geographic_entities", dot: "dot-food" }\n' +
-        "  };\n" +
+        "  var TAX = {};\n" +
         "  function taxMeta(tax) {\n" +
         "    if (TAX[tax]) return TAX[tax];\n" +
-        '    return { label: tax || "other", dot: "dot-food" };\n' +
+        "    var dot = 'dot-food';\n" +
+        "    if (/health|education|community|government/i.test(tax)) dot = 'dot-health';\n" +
+        "    else if (/lodg|accom|travel/i.test(tax)) dot = 'dot-stay';\n" +
+        "    TAX[tax] = { label: tax, dot: dot };\n" +
+        "    return TAX[tax];\n" +
         "  }\n" +
         "  var candidates = [];\n" +
-        "  window.candidates = candidates;\n\n";
+        "  window.candidates = candidates;\n\n" +
+        "  function rebuildChips(chips) {\n" +
+        "    var fg = document.getElementById('filter-group');\n" +
+        "    if (!fg || !chips || !chips.length) return;\n" +
+        "    var active = (fg.querySelector('.chip.is-active') || {}).dataset;\n" +
+        "    var cur = active && active.filter ? active.filter : 'all';\n" +
+        "    var html = '<button class=\"chip' + (cur === 'all' ? ' is-active' : '') + '\" data-filter=\"all\">Tất cả</button>';\n" +
+        "    chips.forEach(function (t) {\n" +
+        "      var m = taxMeta(t);\n" +
+        "      html += '<button class=\"chip' + (cur === t ? ' is-active' : '') + '\" data-filter=\"' + t + '\">' +\n" +
+        "        '<span class=\"chip__dot ' + m.dot + '\"></span>' + m.label + '</button>';\n" +
+        "    });\n" +
+        "    fg.innerHTML = html;\n" +
+        "  }\n" +
+        "  window.rebuildChips = rebuildChips;\n\n";
       html = html.slice(0, a) + block + html.slice(b);
     }
 
-    /* 2) Safe TAX access */
     html = html.split("TAX[c.taxonomy].dot").join("taxMeta(c.taxonomy).dot");
     html = html.split("TAX[c.taxonomy].label").join("taxMeta(c.taxonomy).label");
 
-    /* 3) Inject API load before last renderGrid() */
     var inject =
+      "  function applyCandidates(payload) {\n" +
+      "    var list = (payload && payload.candidates) ? payload.candidates : [];\n" +
+      "    candidates.length = 0;\n" +
+      "    list.forEach(function (c, i) {\n" +
+      "      var tax = c.taxonomy || c.taxonomy_root || 'food_and_drink';\n" +
+      "      taxMeta(tax);\n" +
+      "      candidates.push({\n" +
+      "        id: c.uid || ('C-' + String(i + 1).padStart(3, '0')),\n" +
+      "        name: c.name || 'Unnamed',\n" +
+      "        taxonomy: tax,\n" +
+      "        taxonomy_root: c.taxonomy_root || tax,\n" +
+      "        confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : '0.00',\n" +
+      "        weight: c.weight != null ? c.weight : 0.3,\n" +
+      "        radius_m: c.radius_m != null ? c.radius_m : 500,\n" +
+      "        lat: c.lat, lng: c.lng,\n" +
+      "        address: c.address || '',\n" +
+      "        primary: c.primary || ''\n" +
+      "      });\n" +
+      "    });\n" +
+      "    var chips = payload.chips || [];\n" +
+      "    if (!chips.length) {\n" +
+      "      var s = {}; list.forEach(function (c) { s[c.taxonomy || c.taxonomy_root] = 1; });\n" +
+      "      chips = Object.keys(s).sort();\n" +
+      "    }\n" +
+      "    if (typeof rebuildChips === 'function') rebuildChips(chips);\n" +
+      "    renderGrid();\n" +
+      "    if (typeof updateSummary === 'function') updateSummary();\n" +
+      "    if (typeof updateNav === 'function') updateNav();\n" +
+      "  }\n" +
       "  function loadRealCandidates() {\n" +
-      '    fetch("/api/candidates?per_tax=40")\n' +
-      "      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })\n" +
-      "      .then(function (payload) {\n" +
-      "        var list = (payload && payload.candidates) ? payload.candidates : [];\n" +
-      "        candidates.length = 0;\n" +
-      "        list.forEach(function (c, i) {\n" +
-      "          var tax = c.taxonomy || c.taxonomy_root || 'food_and_drink';\n" +
-      "          if (!TAX[tax]) TAX[tax] = { label: tax, dot: 'dot-food' };\n" +
-      "          candidates.push({\n" +
-      "            id: c.uid || ('C-' + String(i + 1).padStart(3, '0')),\n" +
-      "            name: c.name || 'Unnamed',\n" +
-      "            taxonomy: tax,\n" +
-      "            taxonomy_root: c.taxonomy_root || tax,\n" +
-      "            confidence: c.confidence != null ? Number(c.confidence).toFixed(2) : '0.00',\n" +
-      "            weight: c.weight != null ? c.weight : 0.3,\n" +
-      "            radius_m: c.radius_m != null ? c.radius_m : 500,\n" +
-      "            lat: c.lat, lng: c.lng,\n" +
-      "            address: c.address || '',\n" +
-      "            primary: c.primary || ''\n" +
-      "          });\n" +
-      "        });\n" +
-      "        renderGrid();\n" +
-      "        if (typeof updateSummary === 'function') updateSummary();\n" +
-      "        if (typeof updateNav === 'function') updateNav();\n" +
-      "      })\n" +
-      "      .catch(function (err) { console.error('[candidates]', err); });\n" +
+      "    var urls = ['/static/candidates.json', '/static/candidates_xuanhuong.json', '/api/candidates?per_tax=40'];\n" +
+      "    function tryNext(i) {\n" +
+      "      if (i >= urls.length) { console.error('[candidates] all sources failed'); return; }\n" +
+      "      fetch(urls[i]).then(function (r) {\n" +
+      "        if (!r.ok) throw new Error('HTTP ' + r.status);\n" +
+      "        return r.json();\n" +
+      "      }).then(applyCandidates).catch(function () { tryNext(i + 1); });\n" +
+      "    }\n" +
+      "    tryNext(0);\n" +
       "  }\n" +
       "  loadRealCandidates();\n";
 
     var last = html.lastIndexOf("  renderGrid();");
-    if (last >= 0) {
-      html = html.slice(0, last) + inject + "\n" + html.slice(last);
-    }
+    if (last >= 0) html = html.slice(0, last) + inject + "\n" + html.slice(last);
     return html;
   }
 

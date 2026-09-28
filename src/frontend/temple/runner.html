@@ -5,40 +5,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MCLP Runner — loading…</title>
   <style>
-    body {
-      margin: 0;
-      background: #0d1512;
-      color: #8ea092;
-      font-family: ui-monospace, monospace;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
+    body{margin:0;background:#0d1512;color:#8ea092;font-family:ui-monospace,monospace;
+      display:flex;align-items:center;justify-content:center;min-height:100vh}
   </style>
 </head>
 <body>
-  <p id="msg">Đang tải runner từ main…</p>
+  <p id="msg">Đang tải runner + candidates từ GeoJSON…</p>
   <script>
-    (function () {
-      var URL =
-        "https://raw.githubusercontent.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards/main/src/frontend/temple/runner.html";
-      fetch(URL)
-        .then(function (r) {
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          return r.text();
-        })
-        .then(function (html) {
-          document.open();
-          document.write(html);
-          document.close();
-        })
-        .catch(function (err) {
-          document.getElementById("msg").textContent =
-            "Không tải được runner.html từ main: " + err.message +
-            ". Copy artifacts/runner_from_main.html → src/frontend/temple/runner.html và push.";
-        });
-    })();
+(function () {
+  var MAIN_RUNNER =
+    "https://raw.githubusercontent.com/baokhanh546123/Decison-Optimazation-in-XuanHuongWards/main/src/frontend/temple/runner.html";
+
+  function patchCandidates(html) {
+    var start = html.indexOf("  var STREETS = [");
+    var end = html.indexOf("  var selected = new Set();");
+    if (start >= 0 && end > start) {
+      var replacement =
+        "  /* Candidates from XuanHuongWarsFeaturesClean.geojson via GET /api/candidates */\n" +
+        "  var candidates = [];\n" +
+        "  window.candidates = candidates;\n\n";
+      html = html.slice(0, start) + replacement + html.slice(end);
+    }
+    if (html.indexOf("candidates_loader.js") < 0) {
+      html = html.replace(
+        "</body>",
+        '  <script src="/js/candidates_loader.js"><\/script>\n</body>'
+      );
+    }
+    return html;
+  }
+
+  fetch(MAIN_RUNNER)
+    .then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(function (html) {
+      document.open();
+      document.write(patchCandidates(html));
+      document.close();
+    })
+    .catch(function (err) {
+      document.getElementById("msg").textContent =
+        "Không tải được runner: " + err.message;
+    });
+})();
   </script>
 </body>
 </html>

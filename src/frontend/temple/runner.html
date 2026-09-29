@@ -74,7 +74,7 @@
       <div class="wizard__pane" data-pane="2">
         <div class="pane__head">
           <h3>Điều chỉnh threshold theo candidate</h3>
-          <p>Kéo slider — thumb phát sáng, track đổ đầy, giá trị nhảy nhẹ khi thay đổi.</p>
+          <p>Kéo slider — thumb phát sáng, track đổ đầy, giá trị nhảy nhẹ khi thay đổi. Demand-weight threshold: candidate chỉ phủ các demand có p<sub>i</sub> ≥ ngưỡng × p<sub>max</sub> (0 = phủ tất cả). Confidence riêng dưới ngưỡng thì candidate bị loại khỏi tập J.</p>
         </div>
         <div class="threshold-list" id="threshold-list">
           <div class="empty-state" id="threshold-empty">
@@ -111,6 +111,23 @@
           </div>
         </div>
         <div class="panel">
+          <p class="panel__title">Thuật toán: Benders Decomposition (exact, cắt lõm closed-form)</p>
+          <div class="params-grid">
+            <div class="field">
+              <div class="field__label">Số vòng cắt tối đa mỗi điểm ε<b id="val-bmax">100</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-bmax"></div><input type="range" id="benders-max-iters" min="10" max="500" step="10" value="100" /></div>
+            </div>
+            <div class="field">
+              <div class="field__label">Thời gian giải master mỗi vòng (s)<b id="val-bmaster">3</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-bmaster"></div><input type="range" id="benders-master-time" min="1" max="30" step="1" value="3" /></div>
+            </div>
+            <div class="field field--full">
+              <div class="field__label">Ngân sách thời gian mỗi điểm ε (s)<b id="val-btime">30</b></div>
+              <div class="slider-wrap"><div class="slider-fill" id="fill-btime"></div><input type="range" id="benders-time-limit" min="5" max="300" step="5" value="30" /></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
           <p class="panel__title">Trọng số mục tiêu (λ₁ · λ₂)</p>
           <div class="field balance">
             <div class="slider-wrap"><div class="slider-fill" id="fill-balance"></div><input type="range" id="balance" min="0" max="100" value="55" /></div>
@@ -128,7 +145,7 @@
             <span>Confidence ≥ <b id="sum-confidence">0.75</b></span>
             <span>P_max: <b id="sum-pmax">8</b></span>
           </div>
-          <button class="btn-run" id="btn-run">Chạy tối ưu (ε-constraint sweep)</button>
+          <button class="btn-run" id="btn-run">Chạy tối ưu (Benders · ε-constraint)</button>
         </div>
         <div class="pipeline" id="pipeline">
           <div class="pipeline__track"><div class="pipeline__fill" id="pipeline-fill"></div></div>
@@ -139,16 +156,20 @@
       <div class="wizard__pane" data-pane="4">
         <div class="pane__head">
           <h3>Pareto front</h3>
-          <p>Tập nghiệm không trội từ epsilon-constraint sweep.</p>
+          <p>Tập nghiệm không trội từ epsilon-constraint sweep, mỗi điểm giải bằng Benders Decomposition. Bấm vào chấm hoặc một dòng để xem các vị trí được chọn.</p>
         </div>
+        <div class="results__note" id="result-note"></div>
         <div class="results__grid">
           <canvas id="pareto-canvas"></canvas>
           <div class="results__stats">
             <div class="stat-line"><span>Điểm Pareto tìm được</span><b id="stat-points">—</b></div>
             <div class="stat-line"><span>Optimality gap trung bình</span><b id="stat-gap">—</b></div>
+            <div class="stat-line"><span>Điểm Benders hội tụ (gap ≈ 0)</span><b id="stat-converged">—</b></div>
             <div class="stat-line"><span>Điểm bị gắn cờ non-monotonic</span><b class="warn" id="stat-flagged">—</b></div>
           </div>
         </div>
+        <div class="pareto-list" id="pareto-list"></div>
+        <div class="facility-panel" id="facility-panel"></div>
       </div>
 
     </div>
@@ -166,11 +187,14 @@
   <div class="container">
     <p>
       Candidate thật từ <code>/static/candidates.json</code> hoặc <code>GET /api/candidates</code>.
-      UI gốc: CSS <code>/static/runner_page.css</code> · JS <code>/js/runner_page.js</code> (loadRealCandidates).
+      Nút "Chạy tối ưu" gọi <code>POST /api/optimize</code> (thuật toán Benders, <code>model/benders_solver.py</code>)
+      rồi poll <code>GET /api/jobs/{job_id}</code>.
+      UI: CSS <code>/static/runner_page.css</code> · JS <code>/js/runner_page.js</code>, <code>/js/runner_benders.js</code>.
     </p>
   </div>
 </footer>
 
+<script src="/js/runner_benders.js"></script>
 <script src="/js/runner_page.js"></script>
 <script src="/js/candidates_loader.js"></script>
 </body>

@@ -155,7 +155,7 @@
     ids.forEach(function(id){
       var c = candidates.find(function(x){ return x.id === id; });
       if (!perCandidateParams[id]) {
-        perCandidateParams[id] = { demand: 0.5, conf: parseFloat(c.confidence) };
+        perCandidateParams[id] = { demand: 0, conf: parseFloat(c.confidence) };
       }
       var p = perCandidateParams[id];
 
@@ -261,20 +261,27 @@
 
   /* cấu hình gửi backend — cùng tên trường với TaxonomyUpdateRequest / OptimizeRequest */
   window.getRunConfig = function(){
-    var roots = Object.keys(selectedByRoot()), tax = {};
+    var roots = Object.keys(selectedByRoot()), tax = {}, per = {};
     roots.forEach(function(r){ tax[r] = { radius_m: taxParams[r].radius, weight: taxParams[r].weight }; });
+    selected.forEach(function(id){ if (perCandidateParams[id]) per[id] = perCandidateParams[id]; });
     return {
       candidates: Array.from(selected),
       taxonomy_root: tax,
-      per_candidate: perCandidateParams,
+      per_candidate: per,
       min_confidence: parseFloat(document.getElementById('confidence').value),
       P_max: parseInt(document.getElementById('pmax').value, 10),
       n_points: parseInt(document.getElementById('epsilon-steps').value, 10),
-      lambda: [parseInt(balanceInput.value, 10), 100 - parseInt(balanceInput.value, 10)]
+      lambda: [parseInt(balanceInput.value, 10), 100 - parseInt(balanceInput.value, 10)],
+      benders_max_iters: parseInt(document.getElementById('benders-max-iters').value, 10),
+      benders_master_time_limit_s: parseFloat(document.getElementById('benders-master-time').value),
+      time_limit_s: parseInt(document.getElementById('benders-time-limit').value, 10)
     };
   };
   bindRange('confidence',    'val-confidence',    function(v){ return parseFloat(v).toFixed(2); });
   bindRange('epsilon-steps', 'val-epsilon',       function(v){ return v; });
+  bindRange('benders-max-iters',   'val-bmax',    function(v){ return v; });
+  bindRange('benders-master-time', 'val-bmaster', function(v){ return v; });
+  bindRange('benders-time-limit',  'val-btime',   function(v){ return v; });
 
   document.getElementById('pmax').addEventListener('input', updateSummary);
 
@@ -297,120 +304,213 @@
   }
 
   /* ---------------------------------------------------------------------
-     3.5 — Mô phỏng pipeline chạy tối ưu (Pane 3 → Pane 4)
+     3.5 — Chạy tối ưu bằng Benders qua API (Pane 3 → Pane 4)
   --------------------------------------------------------------------- */
-  var STAGES = [
-    'Dựng covering constraints (build_base_template)…',
-    'Nhân bản model theo từng epsilon (proto_copy)…',
-    'Giải song song theo batch — CP-SAT subprocess…',
-    'Truyền hint giữa các batch (inter-batch hint chaining)…',
-    'Tổng hợp Pareto front, gắn cờ non-monotonic…'
-  ];
-
   var btnRun = document.getElementById('btn-run');
   var pipelineEl = document.getElementById('pipeline');
   var fillEl = document.getElementById('pipeline-fill');
   var stageEl = document.getElementById('pipeline-stage');
 
+  var lastResult = null;   /* { points, recommended_index, summary, meta } từ /api/jobs/{id} */
+  var pickedIdx = -1;      /* điểm Pareto đang xem chi tiết */
+  var dotHits = [];        /* toạ độ pixel các chấm trên canvas để bắt click */
+
+  function esc(t){
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function(ch){
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+  function fmt(n, d){ return (n == null || isNaN(n)) ? '—' : Number(n).toFixed(d); }
+  function setProgress(pct){
+    if (!reduceMotion && window.gsap){ gsap.to(fillEl, { width: pct + '%', duration: 0.6, ease: 'power1.out' }); }
+    else { fillEl.style.width = pct + '%'; }
+  }
+  function showError(msg){
+    pipelineEl.classList.add('is-visible');
+    stageEl.innerHTML = '<b class="pipeline__err">Lỗi.</b>&nbsp;' + esc(msg);
+  }
+
   btnRun.addEventListener('click', function(){
-    if (selected.size === 0) return;
-    console.info('[run config]', window.getRunConfig());
+    if (selected.size === 0 || btnRun.disabled) return;
+    if (!window.MCLPBenders){ showError('Thiếu /js/runner_benders.js'); return; }
+    var cfg = window.getRunConfig();
+    if (!(cfg.P_max >= 1)){ showError('P_max phải ≥ 1.'); return; }
+    console.info('[run config]', cfg);
+
     btnRun.disabled = true;
     pipelineEl.classList.add('is-visible');
-
-    var i = 0;
     fillEl.style.width = '0%';
+    setProgress(4);
+    stageEl.innerHTML = '<b>1/2</b>&nbsp;Gửi cấu hình tới <code>POST /api/optimize</code>…';
 
-    function nextStage(){
-      if (i >= STAGES.length){
-        stageEl.innerHTML = '<b>Hoàn tất.</b> Đã tổng hợp Pareto front.';
-        populateResults();
-        btnRun.disabled = false;
-        goToStep(4);
-        return;
+    window.MCLPBenders.run(cfg, {
+      onProgress: function(job){
+        var el = job.elapsed_s || 0;
+        if (job.state === 'queued'){
+          stageEl.innerHTML = '<b>2/2</b>&nbsp;Đang xếp hàng chờ solver…';
+        } else {
+          stageEl.innerHTML = '<b>2/2</b>&nbsp;Benders đang chạy — giải master (x<sub>j</sub>, η), subproblem dạng đóng, thêm cắt lõm… ' +
+            '<span class="pipeline__t">' + el.toFixed(0) + ' s</span>';
+        }
+        /* solver không báo % thật -> thanh tiến độ tiệm cận 92%, chỉ để thấy job còn sống */
+        setProgress(Math.round(92 * (1 - Math.exp(-el / 45))) + 4);
       }
-      stageEl.innerHTML = '<b>' + (i + 1) + '/' + STAGES.length + '</b>&nbsp;' + STAGES[i];
-      var pct = Math.round(((i + 1) / STAGES.length) * 100);
-      if (!reduceMotion && window.gsap){
-        gsap.to(fillEl, { width: pct + '%', duration: 0.5, ease: 'power1.inOut' });
-      } else {
-        fillEl.style.width = pct + '%';
-      }
-      i++;
-      setTimeout(nextStage, reduceMotion ? 80 : 560);
-    }
-    nextStage();
+    }).then(function(result){
+      setProgress(100);
+      stageEl.innerHTML = '<b>Hoàn tất.</b> Đã tổng hợp Pareto front bằng Benders.';
+      populateResults(result);
+      btnRun.disabled = false;
+      goToStep(4);
+    }).catch(function(err){
+      btnRun.disabled = false;
+      setProgress(0);
+      showError(err && err.message ? err.message : String(err));
+    });
   });
 
   /* ---------------------------------------------------------------------
-     3.6 — Kết quả: scatter Pareto front (canvas) — Pane 4
+     3.6 — Kết quả thật: scatter Pareto (canvas) + bảng điểm + vị trí được chọn (Pane 4)
   --------------------------------------------------------------------- */
-  function populateResults(){
-    document.getElementById('stat-points').textContent = 11;
-    document.getElementById('stat-gap').textContent = '1.6 %';
-    document.getElementById('stat-flagged').textContent = '1 / 11';
+  function populateResults(res){
+    lastResult = res;
+    var pts = (res && res.points) || [], sum = (res && res.summary) || {}, meta = (res && res.meta) || {};
+    document.getElementById('stat-points').textContent = pts.length;
+    document.getElementById('stat-gap').textContent = sum.mean_gap_pct == null ? '—' : fmt(sum.mean_gap_pct, 2) + ' %';
+    document.getElementById('stat-converged').textContent = (sum.n_converged || 0) + ' / ' + pts.length;
+    document.getElementById('stat-flagged').textContent = (sum.n_flagged || 0) + ' / ' + pts.length;
+
+    var note = document.getElementById('result-note');
+    if (!pts.length){
+      note.innerHTML = 'Không tìm được nghiệm khả thi. Thử nới P_max, hạ confidence hoặc tăng bán kính phủ.';
+    } else {
+      var cov = meta.coverable_profit && meta.total_profit ? (100 * meta.coverable_profit / meta.total_profit) : null;
+      note.innerHTML =
+        '<b>' + esc(meta.n_demand) + '</b> demand · <b>' + esc(meta.n_candidates) + '</b>/' + esc(meta.n_candidates_requested) +
+        ' candidate · P<sub>max</sub>=<b>' + esc(meta.P_max == null ? '—' : meta.P_max) + '</b>' +
+        (cov != null ? ' · phủ tối đa lý thuyết <b>' + fmt(cov, 1) + '%</b>' : '') +
+        (meta.dropped_by_confidence && meta.dropped_by_confidence.length
+          ? ' · <span class="warn">' + meta.dropped_by_confidence.length + ' candidate bị loại vì confidence</span>' : '');
+    }
+    pickedIdx = pts.length ? (res.recommended_index != null ? res.recommended_index : 0) : -1;
+    renderPointList();
+    renderFacilities();
+  }
+
+  function renderPointList(){
+    var host = document.getElementById('pareto-list');
+    var pts = (lastResult && lastResult.points) || [];
+    if (!pts.length){ host.innerHTML = ''; return; }
+    var rows = pts.map(function(q, i){
+      var ok = q.status === 'BENDERS_CONVERGED';
+      return '<tr data-i="' + i + '" tabindex="0" class="' + (i === pickedIdx ? 'is-picked' : '') + '">' +
+        '<td>' + (q.is_recommended ? '<span class="tag tag--rec" title="Điểm khuyến nghị theo λ">★</span>' : '') + (i + 1) + '</td>' +
+        '<td>' + fmt(q.epsilon, 3) + '</td>' +
+        '<td>' + fmt(q.f1_covering_profit, 1) + '</td>' +
+        '<td>' + fmt(q.coverage_pct, 1) + '%</td>' +
+        '<td>' + fmt(q.f2_cost, 3) + '</td>' +
+        '<td>' + q.n_facilities + '</td>' +
+        '<td>' + fmt(q.optimality_gap_pct, 2) + '%</td>' +
+        '<td>' + (q.n_benders_iters == null ? '—' : q.n_benders_iters) + '</td>' +
+        '<td><span class="tag ' + (ok ? 'tag--ok' : 'tag--warn') + '">' + (ok ? 'hội tụ' : 'hết vòng/giờ') + '</span>' +
+          (q.flagged_non_monotonic ? ' <span class="tag tag--warn">non-monotonic</span>' : '') + '</td>' +
+        '</tr>';
+    }).join('');
+    host.innerHTML = '<div class="pareto-list__scroll"><table><thead><tr>' +
+      '<th>#</th><th>ε</th><th>f₁ profit</th><th>Phủ</th><th>f₂ cost</th><th>Số CS</th><th>Gap</th><th>Vòng</th><th>Trạng thái</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    host.querySelectorAll('tbody tr').forEach(function(tr){
+      function pick(){ pickPoint(parseInt(tr.dataset.i, 10)); }
+      tr.addEventListener('click', pick);
+      tr.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pick(); } });
+    });
+  }
+
+  function renderFacilities(){
+    var host = document.getElementById('facility-panel');
+    var pts = (lastResult && lastResult.points) || [];
+    var q = pts[pickedIdx];
+    if (!q){ host.innerHTML = ''; return; }
+    var items = q.chosen_uids.map(function(uid, k){
+      var c = candidates.find(function(x){ return x.id === uid; });
+      var tax = c ? c.taxonomy : '';
+      return '<div class="facility">' +
+        '<span class="facility__id">' + esc(uid) + '</span>' +
+        '<span class="facility__name">' + esc((c && c.name) || q.chosen_names[k] || uid) + '</span>' +
+        (c ? '<span class="facility__tax">' + dot(tax) + esc(meta(tax).label) + '</span>' : '') +
+        (c && c.lat != null ? '<span class="facility__pos">' + Number(c.lat).toFixed(5) + ', ' + Number(c.lng).toFixed(5) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    host.innerHTML = '<p class="panel__title">Điểm #' + (pickedIdx + 1) + (q.is_recommended ? ' (khuyến nghị)' : '') +
+      ' — ' + q.n_facilities + ' vị trí · f₁ = ' + fmt(q.f1_covering_profit, 1) + ' · f₂ = ' + fmt(q.f2_cost, 3) + '</p>' +
+      '<div class="facility-grid">' + items + '</div>';
+  }
+
+  function pickPoint(i){
+    if (!lastResult || !lastResult.points[i]) return;
+    pickedIdx = i;
+    renderPointList();
+    renderFacilities();
     drawPareto();
   }
 
   function drawPareto(){
     var canvas = document.getElementById('pareto-canvas');
+    var pts = (lastResult && lastResult.points) || [];
     var dpr = window.devicePixelRatio || 1;
     var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;          /* pane đang ẩn -> vẽ lại khi vào Bước 4 */
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    var w = rect.width, h = rect.height;
-    var pad = 34;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var w = rect.width, h = rect.height, padL = 46, padB = 34, padT = 14, padR = 16;
 
     ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = '#263a30';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#263a30'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, h - padB); ctx.lineTo(w - padR, h - padB); ctx.stroke();
+    ctx.fillStyle = '#5c6d62'; ctx.font = '11px IBM Plex Mono, monospace';
+    ctx.fillText('f2 — cost →', w - 84, h - 10);
+    ctx.save(); ctx.translate(12, h - padB - 6); ctx.rotate(-Math.PI / 2); ctx.fillText('f1 — covering profit →', 0, 0); ctx.restore();
+
+    dotHits = [];
+    if (!pts.length) return;
+
+    var xs = pts.map(function(q){ return q.f2_cost; }), ys = pts.map(function(q){ return q.f1_covering_profit; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var dx = (x1 - x0) || 1, dy = (y1 - y0) || 1;
+    function px(v){ return padL + 10 + (v - x0) / dx * (w - padL - padR - 20); }
+    function py(v){ return (h - padB - 10) - (v - y0) / dy * (h - padB - padT - 20); }
+
+    ctx.fillStyle = '#8ea092';
+    ctx.fillText(fmt(x0, 2), padL + 4, h - padB + 14);
+    ctx.fillText(fmt(x1, 2), w - padR - 34, h - padB + 14);
+    ctx.fillText(fmt(y0, 0), 4, h - padB - 2);
+    ctx.fillText(fmt(y1, 0), 4, padT + 10);
+
+    var order = pts.map(function(_, i){ return i; }).sort(function(a, b){ return pts[a].f2_cost - pts[b].f2_cost; });
+    ctx.strokeStyle = 'rgba(91,146,121,0.9)'; ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(pad, 12); ctx.lineTo(pad, h - pad); ctx.lineTo(w - 12, h - pad);
+    order.forEach(function(i, k){ var X = px(pts[i].f2_cost), Y = py(pts[i].f1_covering_profit); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
     ctx.stroke();
 
-    ctx.fillStyle = '#5c6d62';
-    ctx.font = '11px IBM Plex Mono, monospace';
-    ctx.fillText('f2 — cost →', w - 78, h - 12);
-    ctx.save();
-    ctx.translate(14, pad + 6);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('f1 — coverage →', 0, 0);
-    ctx.restore();
-
-    var n = 11;
-    var points = [];
-    for (var k = 0; k < n; k++){
-      var t = k / (n - 1);
-      var x = pad + t * (w - pad - 24);
-      var y = (h - pad) - Math.pow(t, 0.62) * (h - pad - 24);
-      points.push({ x: x, y: y, flagged: k === 7 });
-    }
-
-    function drawDots(alpha){
-      ctx.clearRect(pad + 0.5, 0, w - pad - 0.5, h - pad - 0.5);
-      ctx.strokeStyle = 'rgba(91,146,121,' + alpha + ')';
-      ctx.beginPath();
-      points.forEach(function(p, idx){ idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
-      ctx.stroke();
-      points.forEach(function(p){
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.flagged ? 5 : 4, 0, Math.PI * 2);
-        ctx.fillStyle = p.flagged ? '#b5602e' : '#d4a24e';
-        ctx.globalAlpha = alpha;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      });
-    }
-
-    if (!reduceMotion && window.gsap){
-      var progress = { v: 0 };
-      gsap.to(progress, { v: 1, duration: 0.8, ease: 'power2.out', onUpdate: function(){ drawDots(progress.v); } });
-    } else {
-      drawDots(1);
-    }
+    order.forEach(function(i){
+      var q = pts[i], X = px(q.f2_cost), Y = py(q.f1_covering_profit);
+      dotHits.push({ i: i, x: X, y: Y });
+      ctx.beginPath(); ctx.arc(X, Y, q.is_recommended ? 6 : 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = q.flagged_non_monotonic ? '#b5602e' : (q.is_recommended ? '#e3b568' : '#d4a24e');
+      ctx.fill();
+      if (i === pickedIdx){ ctx.strokeStyle = '#e7eae2'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, 9, 0, Math.PI * 2); ctx.stroke(); }
+    });
   }
+  window.__drawPareto = drawPareto;
+
+  document.getElementById('pareto-canvas').addEventListener('click', function(e){
+    var r = this.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, best = -1, bd = 14;
+    dotHits.forEach(function(d){ var dist = Math.hypot(d.x - mx, d.y - my); if (dist < bd){ bd = dist; best = d.i; } });
+    if (best >= 0) pickPoint(best);
+  });
+  window.addEventListener('resize', function(){ if (currentStep === 4) drawPareto(); });
 
   /* ---------------------------------------------------------------------
      3.7 — Điều hướng wizard: stepper + Back/Next + transition GSAP
@@ -451,7 +551,7 @@
       wizardHint.textContent = '';
     } else if (currentStep === 3){
       btnNext.style.display = 'none';
-      wizardHint.textContent = 'Nhấn "Chạy tối ưu" bên dưới để xem kết quả';
+      wizardHint.textContent = 'Nhấn "Chạy tối ưu" — Benders giải trên server, có thể mất vài chục giây';
     } else {
       btnNext.style.display = 'none';
       wizardHint.textContent = 'Hoàn tất — dùng "Quay lại" để chỉnh tham số khác';
@@ -468,6 +568,7 @@
       currentStep = target;
       renderStepper(currentStep);
       updateNav();
+      if (currentStep === 4) drawPareto();
     }
 
     if (reduceMotion || !window.gsap){

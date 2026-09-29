@@ -764,7 +764,8 @@ class Optimization:
         best_f1_seen = -np.inf
         stopped_early = False
 
-        ctx = mp.get_context("fork")
+        # fork không có trên Windows -> dùng spawn (task NamedTuple + hàm module-level đều pickle được)
+        ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
         with ProcessPoolExecutor(max_workers=self.n_parallel, mp_context=ctx) as ex:
             for batch_start in range(0, len(epsilons), self.n_parallel):
                 if stopped_early:

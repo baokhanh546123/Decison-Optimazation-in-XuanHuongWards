@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 BACKEND_DIR = Path(__file__).resolve().parent
+# các package nội bộ (api/, core/, model/, dataclass/...) import theo kiểu `from api.x import ...`
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 SRC_DIR = BACKEND_DIR.parent
 ROOT_DIR = SRC_DIR.parent
 FRONTEND_DIR = SRC_DIR / "frontend"
@@ -28,7 +33,13 @@ try:
 except ImportError:  # pragma: no cover
     from backend.dataclass.taxonomy_config import DEFAULT_TAXONOMY_CONFIG  # type: ignore
 
+from api.jobs import JobManager  # noqa: E402
+from api.runner_schemas import RunnerOptimizeRequest  # noqa: E402
+from api import runner_service  # noqa: E402
+
 TAX_CFG = DEFAULT_TAXONOMY_CONFIG
+# Benders giải nhiều điểm ε song song trong 1 job -> chỉ cho 1 job chạy cùng lúc để không quá tải CPU
+job_manager = JobManager(max_concurrent_solves=1)
 UI_ALIAS = {"lodging": "accommodation", "health_care": "health_and_medicine"}
 
 app = FastAPI(
@@ -185,7 +196,10 @@ async def health() -> dict[str, Any]:
             "runner": "/run",
             "candidates": "/api/candidates",
             "candidates_static": "/static/candidates.json",
+            "optimize": "POST /api/optimize",
+            "job": "GET /api/jobs/{job_id}",
         },
+        "algorithm": "benders",
     }
 
 
@@ -238,6 +252,51 @@ async def api_candidates(
             "candidates": candidates,
         }
     )
+
+
+def _job_payload(rec) -> dict[str, Any]:
+    end = rec.finished_at or time.time()
+    elapsed = (end - rec.started_at) if rec.started_at else 0.0
+    err = None
+    if rec.error:
+        err = rec.error.strip().splitlines()[0][:400]
+    return {
+        "job_id": rec.job_id,
+        "state": rec.state,  # queued | running | done | failed
+        "created_at": rec.created_at,
+        "started_at": rec.started_at,
+        "finished_at": rec.finished_at,
+        "elapsed_s": round(elapsed, 2),
+        "error": err,
+        "result": rec.results if rec.state == "done" else None,
+    }
+
+
+@app.post("/api/optimize", status_code=202)
+async def api_optimize(req: RunnerOptimizeRequest) -> dict[str, Any]:
+    """Chạy ε-constraint sweep bằng Benders Decomposition cho các candidate đã chọn ở runner.html.
+
+    Trả về job_id ngay; client poll GET /api/jobs/{job_id}.
+    """
+    lookup = runner_service.candidate_lookup()
+    unknown = [u for u in req.candidates if u not in lookup]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Candidate không tồn tại: {', '.join(unknown[:5])}")
+    job_id = await job_manager.submit(0, lambda: runner_service.run_benders(req))
+    return {"job_id": job_id, "state": "queued"}
+
+
+@app.get("/api/jobs/{job_id}")
+async def api_job(job_id: str) -> dict[str, Any]:
+    rec = await job_manager.get(job_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy job")
+    return _job_payload(rec)
+
+
+@app.get("/api/jobs")
+async def api_jobs(limit: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
+    return [{**_job_payload(r), "result": None} for r in await job_manager.list_recent(limit)]
 
 
 if ASSET_DIR.is_dir():

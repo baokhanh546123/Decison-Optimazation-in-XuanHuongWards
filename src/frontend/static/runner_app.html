@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<title>Setup runner_app</title>
+<style>
+body{margin:0;background:#0d1512;color:#8ea092;font-family:ui-monospace,monospace;padding:40px;line-height:1.7;max-width:640px}
+code{color:#d4a24e;display:block;background:#132018;padding:12px;border-radius:8px;margin:12px 0;white-space:pre-wrap}
+b{color:#d4a24e}
+h2{color:#e8efe9}
+</style>
+</head>
+<body>
+<h2>Thiếu file runner_app.html (UI đầy đủ)</h2>
+<p>Runner không còn fetch GitHub (bị treo). Cần file self-contained trên <b>cùng origin</b>.</p>
+<p><b>1 lần duy nhất</b> — copy file full từ artifacts:</p>
+<code>cp artifacts/runner_full_geo.html src/frontend/static/runner_app.html</code>
+<p>Hoặc tải file <code>runner_full_geo.html</code> từ project artifacts rồi đặt vào:</p>
+<code>src/frontend/static/runner_app.html</code>
+<p>Sau đó restart server + hard refresh (Ctrl+Shift+R).</p>
+<p>File đã gồm: guides 4 bước · bán kính theo candidate · load /static/candidates.json · UI đầy đủ.</p>
+</body>
+</html>

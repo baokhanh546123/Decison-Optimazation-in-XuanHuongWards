@@ -37,6 +37,17 @@ Ba chế độ (eps_mode)
 - tight:       ε_max = top-P_max costs; auto_reduce theo coverage weight.
 - geographic:  Spatial Decomposition — cluster ứng viên (KMeans/PAM),
                giảm cục bộ từng cụm, hợp nghiệm, rồi ε-sweep trên J đã giảm.
+<<<<<<< HEAD
+=======
+- benders:     Benders Decomposition (exact) — master chỉ có x_j + η (KHÔNG
+               có y_i / ràng buộc covering, kích thước không phụ thuộc |I|).
+               Subproblem dạng đóng (không cần LP solver), sinh optimality cut
+               lõm mỗi vòng lặp. Xem model/benders_solver.py để biết chứng
+               minh công thức + giới hạn so với Branch-and-Benders-Cut thật
+               (Cordeau et al., EJOR 2019) — OR-Tools CP-SAT không expose lazy
+               constraint trong 1 cây B&B nên đây là iterative cutting-plane,
+               vẫn exact nhưng re-solve master nhiều lần thay vì 1 lần.
+>>>>>>> union
 """
 
 import os
@@ -58,6 +69,10 @@ from model.geo_decomp import (
     pam_numpy,
     select_indices_by_cluster,
 )
+<<<<<<< HEAD
+=======
+from model.benders_solver import BendersEpsilonTask, solve_one_epsilon_benders
+>>>>>>> union
 
 
 class Optimization:
@@ -69,6 +84,11 @@ class Optimization:
         "CPU_COUNT", "utm_epsg", "max_candidates", "eps_mode",
         "early_stop", "early_stop_patience", "early_stop_tol", "re_solve_gap_threshold",
         "n_geo_clusters", "geo_cluster_method", "geo_max_per_cluster",
+<<<<<<< HEAD
+=======
+        "benders_max_iters", "benders_master_time_limit_s",
+        "_candidate_index_map",
+>>>>>>> union
     )
 
     def __init__(
@@ -102,6 +122,11 @@ class Optimization:
         n_geo_clusters: int = 6,
         geo_cluster_method: str = "kmeans",
         geo_max_per_cluster: Optional[int] = None,
+<<<<<<< HEAD
+=======
+        benders_max_iters: int = 200,
+        benders_master_time_limit_s: float = 5.0,
+>>>>>>> union
     ):
         """
         Parameters
@@ -112,12 +137,24 @@ class Optimization:
             Early-stop **sweep**: dừng khi f1 bão hòa qua `early_stop_patience` điểm.
         re_solve_flagged : bool
             Sau sweep, re-solve điểm non-monotonic hoặc gap > re_solve_gap_threshold.
+<<<<<<< HEAD
         eps_mode : {"notebook", "tight", "geographic"}
+=======
+        eps_mode : {"notebook", "tight", "geographic", "benders"}
+>>>>>>> union
         n_geo_clusters : int
             Số cụm không gian (mode geographic).
         geo_cluster_method : {"kmeans", "pam"}
         geo_max_per_cluster : int | None
             Quota ứng viên mỗi cụm; None → chia đều max_candidates.
+<<<<<<< HEAD
+=======
+        benders_max_iters : int
+            Số vòng lặp cutting-plane tối đa mỗi điểm ε (mode benders).
+        benders_master_time_limit_s : float
+            Trần thời gian MỖI lần giải master CP-SAT (không phải tổng) — tổng
+            vẫn bị chặn bởi time_limit_s như các mode khác.
+>>>>>>> union
         """
         self.data = data
         self.demand_set = demand_set
@@ -144,13 +181,16 @@ class Optimization:
         self.CPU_COUNT = max(1, os.cpu_count() or 1) if CPU_COUNT is None else CPU_COUNT
         self.utm_epsg = utm_epsg
         self.max_candidates = max_candidates
-        valid = ("notebook", "tight", "geographic")
+        valid = ("notebook", "tight", "geographic", "benders")
         self.eps_mode = eps_mode if eps_mode in valid else "notebook"
         self.n_geo_clusters = max(1, int(n_geo_clusters))
         self.geo_cluster_method = (
             geo_cluster_method if geo_cluster_method in ("kmeans", "pam") else "kmeans"
         )
         self.geo_max_per_cluster = geo_max_per_cluster
+        self.benders_max_iters = max(1, int(benders_max_iters))
+        self.benders_master_time_limit_s = float(benders_master_time_limit_s)
+        self._candidate_index_map: Optional[np.ndarray] = None
 
         if self.n_parallel * self.workers_per_solve > self.CPU_COUNT:
             print(
@@ -191,6 +231,7 @@ class Optimization:
             budget=data.budget,
             must_cover=data.must_cover.copy() if data.must_cover is not None else None,
         )
+        self._candidate_index_map = keep_sorted.copy()
         print(
             f"[OK] Candidate reduction: |J| {n_j} → {new_data.n_j} "
             f"(top by coverage weight, max_candidates={K})"
@@ -259,6 +300,7 @@ class Optimization:
             budget=data.budget,
             must_cover=data.must_cover.copy() if data.must_cover is not None else None,
         )
+        self._candidate_index_map = keep_arr.copy()
         print(
             f"[OK] Geographic reduction ({method}): |J| {n_j} → {new_data.n_j} "
             f"(n_clusters={k}, quota/cluster≈{quota})"
@@ -425,7 +467,7 @@ class Optimization:
 
         if data.budget is not None:
             eps_max = float(data.budget)
-        elif self.eps_mode in ("tight", "geographic") and data.P_max is not None and int(data.P_max) < data.n_j:
+        elif self.eps_mode in ("tight", "geographic", "benders") and data.P_max is not None and int(data.P_max) < data.n_j:
             P = int(data.P_max)
             eps_max = float(np.sort(c)[-P:].sum()) * 1.01
         else:
@@ -450,6 +492,9 @@ class Optimization:
         """
         if self.data is None:
             raise ValueError("self.data chưa được gán")
+
+        if self.eps_mode == "benders":
+            return self._epsilon_constraint_sweep_benders()
 
         if self.eps_mode == "geographic":
             self.reduce_candidates_geographic()
@@ -567,6 +612,7 @@ class Optimization:
             self._resolve_flagged_points(results, template_text, n_i, n_j, hint_x)
 
         results.sort(key=lambda r: r["epsilon"])
+        self._remap_results_to_original_indices(results)
         self._report_summary(results, stopped_early=stopped_early)
         return results
 
@@ -604,6 +650,33 @@ class Optimization:
             self.n_geo_clusters = prev_k
             self.geo_cluster_method = prev_m
             self.geo_max_per_cluster = prev_q
+
+    def _remap_results_to_original_indices(self, results: list) -> None:
+        """Map chosen_candidates từ chỉ số J' về J gốc sau reduction.
+
+        Solver trả index trong tập đã giảm; candidate_gdf dùng candidate_id gốc.
+        """
+        idx_map = getattr(self, "_candidate_index_map", None)
+        if idx_map is None or len(results) == 0:
+            return
+        idx_map = np.asarray(idx_map, dtype=np.int64)
+        n_map = len(idx_map)
+        for r in results:
+            chosen = r.get("chosen_candidates")
+            if chosen is not None:
+                remapped = []
+                for j in chosen:
+                    j = int(j)
+                    if 0 <= j < n_map:
+                        remapped.append(int(idx_map[j]))
+                    else:
+                        remapped.append(j)
+                r["chosen_candidates"] = remapped
+                r["chosen_candidates_reduced"] = list(chosen)
+        print(
+            f"[OK] Remapped chosen_candidates → original candidate_id "
+            f"(index_map size={n_map})"
+        )
 
     def _flag_non_monotonic(self, results: list) -> None:
         running_max_f1 = -np.inf
@@ -670,6 +743,146 @@ class Optimization:
                 print(
                     f"CẢI THIỆN → f1={r_new['f1_covering_profit']:.3f} "
                     f"gap={r_new['optimality_gap_pct']:.2f}%{diag}"
+                )
+            else:
+                print("không cải thiện")
+
+
+    def _epsilon_constraint_sweep_benders(self):
+        """ε-sweep bằng Benders Decomposition (exact) — xem model/benders_solver.py.
+
+        Không gọi build_base_template()/không có template proto covering nào —
+        master mỗi điểm ε chỉ gồm x_j + η, kích thước KHÔNG phụ thuộc |I|.
+        """
+        data = self.data
+        n_i, n_j = data.n_i, data.n_j
+        print(
+            f"[EXPERIMENT] eps_mode=benders — master chỉ có x_j+η (|J|={n_j}), "
+            f"KHÔNG có y_i (|I|={n_i}) hay ràng buộc covering trong master."
+        )
+        eps_min, eps_max = self._compute_epsilon_range()
+        print(
+            f"[INFO] mode=benders | CPU={self.CPU_COUNT} | n_parallel={self.n_parallel} | "
+            f"time_limit={self.time_limit_s}s/điểm | "
+            f"master_time_limit={self.benders_master_time_limit_s}s | "
+            f"max_iters={self.benders_max_iters} | "
+            f"gap_target={self.relative_gap * 100:.1f}% | SCALE={self.SCALE:,}"
+        )
+        print(
+            f"[INFO] ε range = [{eps_min:.4f}, {eps_max:.4f}]  "
+            f"(P_max={data.P_max}, n_i={n_i}, n_j={n_j}, nnz={data.a.nnz})"
+        )
+        epsilons = self._make_epsilons()
+        print(f"[INFO] Số điểm ε dự kiến: {len(epsilons)}")
+
+        a_csr = data.a.tocsr()
+        results: list = []
+        plateau_count = 0
+        best_f1_seen = -np.inf
+        stopped_early = False
+
+        # fork không có trên Windows -> dùng spawn (task NamedTuple + hàm module-level đều pickle được)
+        ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
+        with ProcessPoolExecutor(max_workers=self.n_parallel, mp_context=ctx) as ex:
+            for batch_start in range(0, len(epsilons), self.n_parallel):
+                if stopped_early:
+                    break
+                batch_eps = epsilons[batch_start: batch_start + self.n_parallel]
+                tasks = [
+                    BendersEpsilonTask(
+                        a=a_csr, p=data.p, c=data.c, eps=float(eps), P_max=data.P_max,
+                        time_limit_s=self.time_limit_s,
+                        master_time_limit_s=self.benders_master_time_limit_s,
+                        relative_gap=self.relative_gap, scale=self.SCALE,
+                        max_iters=self.benders_max_iters,
+                        num_search_workers=self.workers_per_solve,
+                    )
+                    for eps in batch_eps
+                ]
+                for eps_val, r in zip(batch_eps, ex.map(solve_one_epsilon_benders, tasks)):
+                    if r is None:
+                        print(f"  → ε={eps_val:.4f} FAILED (infeasible / no solution)")
+                        continue
+                    r.pop("x_solution")
+                    self._submodular_diagnostic_bound(eps_val, r)
+                    results.append(r)
+                    diag = (
+                        f"  diag_gap={r['submodular_diagnostic_gap_pct']:.2f}%"
+                        if r.get("submodular_diagnostic_ub") is not None else ""
+                    )
+                    print(
+                        f"  → ε={r['epsilon']:.4f}  f1={r['f1_covering_profit']:.3f}  "
+                        f"f2={r['f2_cost']:.4f}  n_fac={r['n_facilities']}  "
+                        f"gap={r['optimality_gap_pct']:.2f}%{diag}  "
+                        f"iters={r['n_benders_iters']}  {r['status']}  t={r['solve_time_s']:.1f}s"
+                    )
+
+                    if self.early_stop:
+                        f1 = float(r["f1_covering_profit"])
+                        if f1 > best_f1_seen + self.early_stop_tol:
+                            best_f1_seen = f1
+                            plateau_count = 0
+                        else:
+                            plateau_count += 1
+                            if plateau_count >= self.early_stop_patience:
+                                remaining = len(epsilons) - (batch_start + len(batch_eps))
+                                print(
+                                    f"[EARLY-STOP] f1 bão hòa qua {plateau_count} điểm ε "
+                                    f"(best_f1={best_f1_seen:.3f}) — bỏ {max(0, remaining)} "
+                                    f"điểm ε còn lại."
+                                )
+                                stopped_early = True
+                                break
+
+        results.sort(key=lambda r: r["epsilon"])
+        self._flag_non_monotonic(results)
+
+        if self.re_solve_flagged:
+            self._resolve_flagged_points_benders(results)
+
+        results.sort(key=lambda r: r["epsilon"])
+        self._remap_results_to_original_indices(results)
+        self._report_summary(results, stopped_early=stopped_early)
+        return results
+
+    def _resolve_flagged_points_benders(self, results: list) -> None:
+        data = self.data
+        a_csr = data.a.tocsr()
+        gap_threshold = self.re_solve_gap_threshold
+        flagged_idx = [
+            idx for idx, r in enumerate(results)
+            if r["flagged_non_monotonic"] or r["optimality_gap_pct"] > gap_threshold
+        ]
+        if not flagged_idx:
+            print("[RE-SOLVE] Không có điểm nào cần re-solve.")
+            return
+        print(
+            f"\n[RE-SOLVE] {len(flagged_idx)} điểm (non-monotonic hoặc gap > {gap_threshold}%) — "
+            f"time_limit={self.re_solve_time_limit}s (benders, max_iters x2)"
+        )
+        for idx in flagged_idx:
+            eps = results[idx]["epsilon"]
+            print(f"  → Re-solving ε={eps:.4f} (benders) ...", end=" ", flush=True)
+            task = BendersEpsilonTask(
+                a=a_csr, p=data.p, c=data.c, eps=float(eps), P_max=data.P_max,
+                time_limit_s=self.re_solve_time_limit,
+                master_time_limit_s=self.benders_master_time_limit_s,
+                relative_gap=min(0.01, self.relative_gap), scale=self.SCALE,
+                max_iters=self.benders_max_iters * 2,
+                num_search_workers=self.workers_per_solve,
+            )
+            r_new = solve_one_epsilon_benders(task)
+            if (
+                r_new is not None
+                and r_new["f1_covering_profit"] >= results[idx]["f1_covering_profit"] - 1e-6
+            ):
+                r_new.pop("x_solution", None)
+                r_new["flagged_non_monotonic"] = False
+                self._submodular_diagnostic_bound(eps, r_new)
+                results[idx] = r_new
+                print(
+                    f"CẢI THIỆN → f1={r_new['f1_covering_profit']:.3f} "
+                    f"gap={r_new['optimality_gap_pct']:.2f}%"
                 )
             else:
                 print("không cải thiện")

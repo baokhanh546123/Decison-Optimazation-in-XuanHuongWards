@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
 
 from api.jobs import JobManager  # noqa: E402
 from api.runner_schemas import RunnerOptimizeRequest  # noqa: E402
-from api import runner_service  # noqa: E402
+from api import runner_maps, runner_service  # noqa: E402
 
 TAX_CFG = DEFAULT_TAXONOMY_CONFIG
 # Benders giải nhiều điểm ε song song trong 1 job -> chỉ cho 1 job chạy cùng lúc để không quá tải CPU
@@ -198,6 +198,8 @@ async def health() -> dict[str, Any]:
             "candidates_static": "/static/candidates.json",
             "optimize": "POST /api/optimize",
             "job": "GET /api/jobs/{job_id}",
+            "map_html": "GET /api/runs/{run_id}/map.html?mode=heatmap|dot&point=k",
+            "map_jpeg": "GET /api/runs/{run_id}/map.jpg?point=k",
         },
         "algorithm": "benders",
     }
@@ -297,6 +299,31 @@ async def api_job(job_id: str) -> dict[str, Any]:
 @app.get("/api/jobs")
 async def api_jobs(limit: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
     return [{**_job_payload(r), "result": None} for r in await job_manager.list_recent(limit)]
+
+
+
+def _render_map(run_id: str, kind: str, mode: str, point: int | None) -> FileResponse:
+    """Dựng bản đồ bằng package visualize (blocking -> endpoint khai báo `def` để chạy trong threadpool)."""
+    try:
+        path = runner_maps.render(run_id, kind, mode=mode, point=point)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lần chạy (server đã khởi động lại hoặc đã bị dọn cache). Hãy chạy tối ưu lại.")
+    except runner_maps.MapInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except runner_maps.MapUnavailable as exc:
+        raise HTTPException(status_code=501, detail=f"Thiếu thư viện vẽ trên server: {exc}. Chạy: pip install pydeck matplotlib")
+    media = "text/html; charset=utf-8" if kind == "html" else "image/jpeg"
+    return FileResponse(path, media_type=media, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/runs/{run_id}/map.html", include_in_schema=False)
+def api_run_map_html(run_id: str, mode: str = Query("heatmap"), point: int | None = Query(None, ge=0)) -> FileResponse:
+    return _render_map(run_id, "html", mode, point)
+
+
+@app.get("/api/runs/{run_id}/map.jpg", include_in_schema=False)
+def api_run_map_jpg(run_id: str, point: int | None = Query(None, ge=0)) -> FileResponse:
+    return _render_map(run_id, "jpeg", "-", point)
 
 
 if ASSET_DIR.is_dir():

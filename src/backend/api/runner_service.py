@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from api import runner_maps
 from api.runner_schemas import RunnerOptimizeRequest
 from core.coverage import build_coverage_matrix_sparse
 from core.taxonomy_apply import apply_road_cost
@@ -132,6 +133,18 @@ def build_problem(
     cost: np.ndarray | None = None,
 ) -> Tuple[MCLP_Data, List[dict], dict]:
     """Trả (MCLP_Data, danh sách candidate giữ lại theo đúng thứ tự cột J, meta)."""
+    mclp, selected, meta, _demand = build_problem_full(req, lookup, demand, cfg, cost)
+    return mclp, selected, meta
+
+
+def build_problem_full(
+    req: RunnerOptimizeRequest,
+    lookup: Dict[str, dict] | None = None,
+    demand: pd.DataFrame | None = None,
+    cfg: TaxonomyConfig = DEFAULT_TAXONOMY_CONFIG,
+    cost: np.ndarray | None = None,
+) -> Tuple[MCLP_Data, List[dict], dict, pd.DataFrame]:
+    """Như build_problem nhưng trả thêm bảng demand (lon, lat, p_i, coverage_radius_m) để vẽ bản đồ."""
     lookup = candidate_lookup() if lookup is None else lookup
     unknown = [u for u in req.candidates if u not in lookup]
     if unknown:
@@ -169,7 +182,7 @@ def build_problem(
     p = (root.map(w_map).fillna(cfg.default_root_weight).to_numpy(dtype=np.float64)
          * d["confidence"].to_numpy(dtype=np.float64))
     radius = root.map(r_map).fillna(cfg.default_radius_m).to_numpy(dtype=np.float64)
-    d = d.assign(coverage_radius_m=radius)
+    d = d.assign(coverage_radius_m=radius, p_i=p)
 
     cand = pd.DataFrame({
         "lon": [float(c["lng"]) for c in selected],
@@ -201,7 +214,7 @@ def build_problem(
         "coverable_profit": float(p[np.asarray(a.sum(axis=1)).ravel() > 0].sum()),
         "P_max": p_max,
     }
-    return mclp, selected, meta
+    return mclp, selected, meta, d
 
 
 # --------------------------------------------------------------------------- #
@@ -282,7 +295,7 @@ def run_benders(req: RunnerOptimizeRequest, **build_kwargs) -> dict:
     """Hàm blocking — chạy trong thread (JobManager dùng asyncio.to_thread)."""
     from model.optimization import Optimization
 
-    mclp, selected, meta = build_problem(req, **build_kwargs)
+    mclp, selected, meta, demand_df = build_problem_full(req, **build_kwargs)
     cand_df = pd.DataFrame({"lon": [c["lng"] for c in selected], "lat": [c["lat"] for c in selected]})
     n_parallel, workers = _parallelism()
     opt = Optimization(
@@ -304,6 +317,7 @@ def run_benders(req: RunnerOptimizeRequest, **build_kwargs) -> dict:
     )
     results = opt.epsilon_constraint_sweep()
     out = format_results(results, selected, meta, req.lambda_)
+    out["run_id"] = runner_maps.register_run(selected, demand_df, out["points"])
     out["meta"].update({"n_parallel": n_parallel, "workers_per_solve": workers,
                         "benders_max_iters": req.benders_max_iters})
     return out

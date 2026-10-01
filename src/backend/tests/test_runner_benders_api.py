@@ -98,3 +98,37 @@ def test_api_flow_end_to_end():
             time.sleep(0.5)
     assert j["state"] == "done", j.get("error")
     assert j["result"]["points"] and j["result"]["recommended_index"] is not None
+
+
+def test_map_endpoints_use_visualize_package():
+    """Section 2 của runner: bản đồ pydeck (html) + ảnh tĩnh (jpeg) dựng bằng package visualize."""
+    pytest.importorskip("pydeck")
+    pytest.importorskip("matplotlib")
+    client = TestClient(app)
+    uids = list(rs.candidate_lookup())[:8]
+    body = {"candidates": uids, "min_confidence": 0.5, "P_max": 3, "n_points": 4, "time_limit_s": 10,
+            "benders_max_iters": 30, "benders_master_time_limit_s": 2}
+    with client:
+        jid = client.post("/api/optimize", json=body).json()["job_id"]
+        for _ in range(240):
+            j = client.get(f"/api/jobs/{jid}").json()
+            if j["state"] in ("done", "failed"):
+                break
+            time.sleep(0.5)
+        assert j["state"] == "done", j.get("error")
+        rid = j["result"]["run_id"]
+        n_pts = len(j["result"]["points"])
+
+        r = client.get(f"/api/runs/{rid}/map.html", params={"mode": "heatmap"})
+        assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+        assert "deck-container" in r.text and "HeatmapLayer" in r.text
+        r = client.get(f"/api/runs/{rid}/map.html", params={"mode": "dot", "point": 0})
+        assert r.status_code == 200 and "IconLayer" in r.text
+        r = client.get(f"/api/runs/{rid}/map.jpg")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.content[:2] == b"\xff\xd8"
+        r = client.get(f"/api/runs/{rid}/map.jpg", params={"point": n_pts - 1})
+        assert r.status_code == 200
+
+        assert client.get(f"/api/runs/{rid}/map.html", params={"mode": "bogus"}).status_code == 422
+        assert client.get(f"/api/runs/{rid}/map.jpg", params={"point": n_pts + 5}).status_code == 422
+        assert client.get("/api/runs/khongco/map.jpg").status_code == 404

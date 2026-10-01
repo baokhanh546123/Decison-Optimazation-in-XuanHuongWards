@@ -60,3 +60,7 @@ build/
 logs/
 tmp/
 temp/
+*.css.bs64
+*.b64
+
+tests/

@@ -154,22 +154,63 @@
       </div>
 
       <div class="wizard__pane" data-pane="4">
-        <div class="pane__head">
-          <h3>Pareto front</h3>
-          <p>Tập nghiệm không trội từ epsilon-constraint sweep, mỗi điểm giải bằng Benders Decomposition. Bấm vào chấm hoặc một dòng để xem các vị trí được chọn.</p>
+        <div class="results2" id="results2">
+
+          <!-- ===== SECTION 1 — kết quả hiện tại ===== -->
+          <section class="rsec rsec--results" id="sec-results">
+            <header class="rsec__head">
+              <span class="rsec__no">01</span>
+              <div><h3>Kết quả — Pareto front</h3>
+              <p>Tập nghiệm không trội từ ε-constraint sweep, mỗi điểm giải bằng Benders Decomposition. Bấm chấm hoặc một dòng để xem vị trí được chọn.</p></div>
+            </header>
+            <div class="results__note" id="result-note"></div>
+            <div class="results__grid">
+              <canvas id="pareto-canvas"></canvas>
+              <div class="results__stats">
+                <div class="stat-line"><span>Điểm Pareto tìm được</span><b id="stat-points">—</b></div>
+                <div class="stat-line"><span>Optimality gap trung bình</span><b id="stat-gap">—</b></div>
+                <div class="stat-line"><span>Điểm Benders hội tụ (gap ≈ 0)</span><b id="stat-converged">—</b></div>
+                <div class="stat-line"><span>Điểm bị gắn cờ non-monotonic</span><b class="warn" id="stat-flagged">—</b></div>
+              </div>
+            </div>
+            <div class="pareto-list" id="pareto-list"></div>
+            <div class="facility-panel" id="facility-panel"></div>
+          </section>
+
+          <!-- ===== SECTION 2 — biểu đồ (package visualize) ===== -->
+          <section class="rsec rsec--charts" id="sec-charts">
+            <header class="rsec__head">
+              <span class="rsec__no">02</span>
+              <div><h3>Biểu đồ vị trí</h3>
+              <p>Dựng bằng <code>visualize/visualize_plot.py</code>: bản đồ nhiệt demand, bản đồ ghim và ảnh tĩnh. Chọn phạm vi để vẽ toàn bộ Pareto hoặc riêng điểm đang xem ở Section 1.</p></div>
+            </header>
+
+            <div class="chart-controls">
+              <div class="tabs" id="chart-tabs" role="tablist">
+                <button class="tab is-active" role="tab" data-view="heatmap">Bản đồ nhiệt</button>
+                <button class="tab" role="tab" data-view="dot">Bản đồ ghim</button>
+                <button class="tab" role="tab" data-view="jpeg">Ảnh tĩnh</button>
+                <span class="tabs__ink" id="tabs-ink"></span>
+              </div>
+              <div class="seg" id="chart-scope" role="group" aria-label="Phạm vi">
+                <button class="seg__btn is-active" data-scope="all">Toàn bộ Pareto</button>
+                <button class="seg__btn" data-scope="point" id="scope-point">Điểm #—</button>
+              </div>
+            </div>
+
+            <div class="chart-stage" id="chart-stage">
+              <div class="chart-loader" id="chart-loader"><span class="chart-loader__ring"></span><span class="chart-loader__txt" id="chart-loader-txt">Đang dựng biểu đồ…</span></div>
+              <div class="chart-error" id="chart-error"></div>
+              <iframe id="chart-frame" title="Bản đồ Pareto (pydeck)" loading="lazy"></iframe>
+              <img id="chart-img" alt="Bản đồ Pareto (ảnh tĩnh)" />
+            </div>
+            <div class="chart-foot" id="chart-foot">
+              <a id="chart-open" target="_blank" rel="noopener">Mở tab mới ↗</a>
+              <span id="chart-hint">Bản đồ tương tác cần mạng để tải deck.gl và nền bản đồ; ảnh tĩnh thì không.</span>
+            </div>
+          </section>
+
         </div>
-        <div class="results__note" id="result-note"></div>
-        <div class="results__grid">
-          <canvas id="pareto-canvas"></canvas>
-          <div class="results__stats">
-            <div class="stat-line"><span>Điểm Pareto tìm được</span><b id="stat-points">—</b></div>
-            <div class="stat-line"><span>Optimality gap trung bình</span><b id="stat-gap">—</b></div>
-            <div class="stat-line"><span>Điểm Benders hội tụ (gap ≈ 0)</span><b id="stat-converged">—</b></div>
-            <div class="stat-line"><span>Điểm bị gắn cờ non-monotonic</span><b class="warn" id="stat-flagged">—</b></div>
-          </div>
-        </div>
-        <div class="pareto-list" id="pareto-list"></div>
-        <div class="facility-panel" id="facility-panel"></div>
       </div>
 
     </div>
@@ -189,12 +230,15 @@
       Candidate thật từ <code>/static/candidates.json</code> hoặc <code>GET /api/candidates</code>.
       Nút "Chạy tối ưu" gọi <code>POST /api/optimize</code> (thuật toán Benders, <code>model/benders_solver.py</code>)
       rồi poll <code>GET /api/jobs/{job_id}</code>.
-      UI: CSS <code>/static/runner_page.css</code> · JS <code>/js/runner_page.js</code>, <code>/js/runner_benders.js</code>.
+      Biểu đồ: <code>GET /api/runs/{run_id}/map.html|map.jpg</code> (package <code>visualize</code>).
+      UI: CSS <code>/static/runner_page.css</code> · JS <code>runner_page.js</code>, <code>runner_benders.js</code>, <code>runner_fx.js</code>, <code>runner_charts.js</code>.
     </p>
   </div>
 </footer>
 
 <script src="/js/runner_benders.js"></script>
+<script src="/js/runner_fx.js"></script>
+<script src="/js/runner_charts.js"></script>
 <script src="/js/runner_page.js"></script>
 <script src="/js/candidates_loader.js"></script>
 </body>

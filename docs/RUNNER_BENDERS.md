@@ -31,3 +31,23 @@ Chi phí `c_j` = xếp hạng class đường gần nhất (`apply_road_cost`), 
 ```bash
 cd src/backend && PYTHONPATH=. pytest tests/test_runner_benders_api.py -q
 ```
+
+## Bước 4 — 2 section + biểu đồ (package `visualize`)
+Khi vào Bước 4 thẻ wizard mở rộng (GSAP, tối đa 1640px) và chia 2 cột:
+
+| Section | Nội dung |
+|---|---|
+| 01 — Kết quả | Pareto front (canvas vẽ động), thống kê, bảng điểm, vị trí được chọn |
+| 02 — Biểu đồ | Bản đồ nhiệt / bản đồ ghim (pydeck, iframe) và ảnh tĩnh (matplotlib); phạm vi "Toàn bộ Pareto" hoặc "Điểm #k" đang xem ở Section 01 |
+
+Biểu đồ do `visualize/visualize_plot.py` dựng: `plot_pareto_map_pydeck` + `export_deck_html` (html) và
+`plot_pareto_static_jpeg` (jpeg), qua `api/runner_maps.py`. Mỗi lần chạy xong có `run_id` trong kết quả:
+
+```
+GET /api/runs/{run_id}/map.html?mode=heatmap|dot[&point=k]
+GET /api/runs/{run_id}/map.jpg[?point=k]
+```
+Server giữ ngữ cảnh 6 lần chạy gần nhất (RAM + thư mục tạm); restart server thì phải chạy lại để xem biểu đồ.
+Bản đồ pydeck tải deck.gl và nền bản đồ từ CDN nên cần mạng ở trình duyệt; ảnh tĩnh thì không.
+Cần `pip install pydeck matplotlib` (đã có trong requirements.txt).
+JS: `runner_fx.js` (GSAP: mở rộng width, stagger, count-up), `runner_charts.js` (tab, tải biểu đồ).

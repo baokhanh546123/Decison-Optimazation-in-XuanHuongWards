@@ -362,3 +362,56 @@
   .facility__name{ font-family: var(--display); font-size: 13.5px; color: var(--text); line-height: 1.35; }
   .facility__tax{ display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
   .facility__pos{ font-size: 11px; color: var(--mist); }
+
+  /* ---------- [union] Bước 4: mở rộng width + 2 section ---------- */
+  main.wizard.is-wide{ max-width: min(1640px, 96vw); }
+
+  .results2{ display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
+  @media (min-width: 1100px){
+    .results2{ grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+    .rsec--charts{ position: sticky; top: 76px; }
+  }
+
+  .rsec{ border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-panel-raised); padding: 22px 22px 20px; min-width: 0; }
+  .rsec__head{ display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+  .rsec__head h3{ font-size: 16px; color: var(--text); margin-bottom: 4px; }
+  .rsec__head p{ font-size: 12.5px; color: var(--text-muted); line-height: 1.65; max-width: 560px; }
+  .rsec__head code{ color: var(--mist); font-size: 11.5px; }
+  .rsec__no{ font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--gold); border: 1px solid var(--gold-dim); border-radius: 6px; padding: 3px 8px; letter-spacing: 0.04em; flex-shrink: 0; }
+
+  .rsec--results .results__grid{ grid-template-columns: 1fr; }
+  .rsec--results #pareto-canvas{ height: 270px; background: var(--bg-panel); }
+  .rsec--results .results__stats{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .rsec--results .stat-line{ background: var(--bg-panel); }
+  .rsec--results .pareto-list__scroll, .rsec--results .facility{ background: var(--bg-panel); }
+  .rsec--results .pareto-list th{ background: var(--bg-panel); }
+  .facility{ transition: border-color 160ms, transform 160ms; }
+  .facility:hover{ border-color: var(--gold-dim); transform: translateY(-2px); }
+
+  /* tabs + ink */
+  .chart-controls{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs{ position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+  .tab{ background: none; border: 0; color: var(--text-faint); padding: 9px 14px; font-size: 12.5px; cursor: pointer; transition: color 160ms; }
+  .tab:hover{ color: var(--text-muted); }
+  .tab.is-active{ color: var(--text); }
+  .tabs__ink{ position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--gold); border-radius: 2px; }
+  .seg{ display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; background: var(--bg-panel); }
+  .seg__btn{ background: none; border: 0; color: var(--text-muted); font-size: 11.5px; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: background 160ms, color 160ms; }
+  .seg__btn.is-active{ background: rgba(212,162,78,0.14); color: var(--gold); }
+  .seg__btn:disabled{ opacity: 0.35; cursor: not-allowed; }
+
+  /* sân khấu biểu đồ */
+  .chart-stage{ position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 360px; max-height: 680px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: #0a110e; }
+  .chart-stage iframe, .chart-stage img{ position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; opacity: 0; visibility: hidden; }
+  .chart-stage img{ object-fit: contain; background: #fff; }
+  .chart-loader{ position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: linear-gradient(110deg, #0a110e 30%, #101a15 50%, #0a110e 70%); background-size: 200% 100%; animation: chartShimmer 1.6s linear infinite; }
+  .chart-loader__ring{ width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--gold); }
+  .chart-loader__txt{ font-size: 12px; color: var(--text-muted); }
+  .chart-error{ position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 12.5px; line-height: 1.7; color: var(--rust); background: #0a110e; }
+  @keyframes chartShimmer{ from{ background-position: 200% 0; } to{ background-position: -200% 0; } }
+
+  .chart-foot{ display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 11.5px; color: var(--text-faint); }
+  .chart-foot a{ color: var(--mist); text-decoration: none; white-space: nowrap; }
+  .chart-foot a:hover{ color: var(--gold); }
+
+  @media (prefers-reduced-motion: reduce){ .chart-loader{ animation: none; } }

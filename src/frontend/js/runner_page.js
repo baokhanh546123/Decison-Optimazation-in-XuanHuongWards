@@ -374,10 +374,12 @@
   function populateResults(res){
     lastResult = res;
     var pts = (res && res.points) || [], sum = (res && res.summary) || {}, meta = (res && res.meta) || {};
-    document.getElementById('stat-points').textContent = pts.length;
-    document.getElementById('stat-gap').textContent = sum.mean_gap_pct == null ? '—' : fmt(sum.mean_gap_pct, 2) + ' %';
-    document.getElementById('stat-converged').textContent = (sum.n_converged || 0) + ' / ' + pts.length;
-    document.getElementById('stat-flagged').textContent = (sum.n_flagged || 0) + ' / ' + pts.length;
+    var fx = window.MCLPFx;
+    function stat(id, to, o){ var el = document.getElementById(id); if (fx) fx.countUp(el, to, o); else el.textContent = to == null ? '—' : (to.toFixed(o.decimals || 0) + (o.suffix || '')); }
+    stat('stat-points', pts.length, { delay: 0.75 });
+    stat('stat-gap', sum.mean_gap_pct, { decimals: 2, suffix: ' %', delay: 0.85 });
+    stat('stat-converged', sum.n_converged || 0, { suffix: ' / ' + pts.length, delay: 0.95 });
+    stat('stat-flagged', sum.n_flagged || 0, { suffix: ' / ' + pts.length, delay: 1.05 });
 
     var note = document.getElementById('result-note');
     if (!pts.length){
@@ -394,6 +396,7 @@
     pickedIdx = pts.length ? (res.recommended_index != null ? res.recommended_index : 0) : -1;
     renderPointList();
     renderFacilities();
+    if (window.MCLPCharts) window.MCLPCharts.setRun(res.run_id, pts.length, pickedIdx);
   }
 
   function renderPointList(){
@@ -418,6 +421,7 @@
     host.innerHTML = '<div class="pareto-list__scroll"><table><thead><tr>' +
       '<th>#</th><th>ε</th><th>f₁ profit</th><th>Phủ</th><th>f₂ cost</th><th>Số CS</th><th>Gap</th><th>Vòng</th><th>Trạng thái</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    if (window.MCLPFx) window.MCLPFx.pulseRec();
     host.querySelectorAll('tbody tr').forEach(function(tr){
       function pick(){ pickPoint(parseInt(tr.dataset.i, 10)); }
       tr.addEventListener('click', pick);
@@ -443,6 +447,8 @@
     host.innerHTML = '<p class="panel__title">Điểm #' + (pickedIdx + 1) + (q.is_recommended ? ' (khuyến nghị)' : '') +
       ' — ' + q.n_facilities + ' vị trí · f₁ = ' + fmt(q.f1_covering_profit, 1) + ' · f₂ = ' + fmt(q.f2_cost, 3) + '</p>' +
       '<div class="facility-grid">' + items + '</div>';
+    if (renderFacilities.animate && window.MCLPFx) window.MCLPFx.facilitiesIn(0);
+    renderFacilities.animate = true;
   }
 
   function pickPoint(i){
@@ -450,10 +456,13 @@
     pickedIdx = i;
     renderPointList();
     renderFacilities();
-    drawPareto();
+    drawPareto(false);
+    if (window.MCLPCharts) window.MCLPCharts.setPoint(i);
   }
 
-  function drawPareto(){
+  var drawTween = null;
+  function drawPareto(animate){
+    animate = animate === true;
     var canvas = document.getElementById('pareto-canvas');
     var pts = (lastResult && lastResult.points) || [];
     var dpr = window.devicePixelRatio || 1;
@@ -464,15 +473,18 @@
     var ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var w = rect.width, h = rect.height, padL = 46, padB = 34, padT = 14, padR = 16;
+    if (drawTween){ drawTween.kill(); drawTween = null; }
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = '#263a30'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, h - padB); ctx.lineTo(w - padR, h - padB); ctx.stroke();
-    ctx.fillStyle = '#5c6d62'; ctx.font = '11px IBM Plex Mono, monospace';
-    ctx.fillText('f2 — cost →', w - 84, h - 10);
-    ctx.save(); ctx.translate(12, h - padB - 6); ctx.rotate(-Math.PI / 2); ctx.fillText('f1 — covering profit →', 0, 0); ctx.restore();
-
+    function axes(){
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#263a30'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, h - padB); ctx.lineTo(w - padR, h - padB); ctx.stroke();
+      ctx.fillStyle = '#5c6d62'; ctx.font = '11px IBM Plex Mono, monospace';
+      ctx.fillText('f2 — cost →', w - 84, h - 10);
+      ctx.save(); ctx.translate(12, h - padB - 6); ctx.rotate(-Math.PI / 2); ctx.fillText('f1 — covering profit →', 0, 0); ctx.restore();
+    }
     dotHits = [];
+    axes();
     if (!pts.length) return;
 
     var xs = pts.map(function(q){ return q.f2_cost; }), ys = pts.map(function(q){ return q.f1_covering_profit; });
@@ -481,27 +493,50 @@
     var dx = (x1 - x0) || 1, dy = (y1 - y0) || 1;
     function px(v){ return padL + 10 + (v - x0) / dx * (w - padL - padR - 20); }
     function py(v){ return (h - padB - 10) - (v - y0) / dy * (h - padB - padT - 20); }
-
-    ctx.fillStyle = '#8ea092';
-    ctx.fillText(fmt(x0, 2), padL + 4, h - padB + 14);
-    ctx.fillText(fmt(x1, 2), w - padR - 34, h - padB + 14);
-    ctx.fillText(fmt(y0, 0), 4, h - padB - 2);
-    ctx.fillText(fmt(y1, 0), 4, padT + 10);
-
     var order = pts.map(function(_, i){ return i; }).sort(function(a, b){ return pts[a].f2_cost - pts[b].f2_cost; });
-    ctx.strokeStyle = 'rgba(91,146,121,0.9)'; ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    order.forEach(function(i, k){ var X = px(pts[i].f2_cost), Y = py(pts[i].f1_covering_profit); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
-    ctx.stroke();
+    var P = order.map(function(i){ return { i: i, q: pts[i], x: px(pts[i].f2_cost), y: py(pts[i].f1_covering_profit) }; });
+    P.forEach(function(p){ dotHits.push({ i: p.i, x: p.x, y: p.y }); });
 
-    order.forEach(function(i){
-      var q = pts[i], X = px(q.f2_cost), Y = py(q.f1_covering_profit);
-      dotHits.push({ i: i, x: X, y: Y });
-      ctx.beginPath(); ctx.arc(X, Y, q.is_recommended ? 6 : 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = q.flagged_non_monotonic ? '#b5602e' : (q.is_recommended ? '#e3b568' : '#d4a24e');
-      ctx.fill();
-      if (i === pickedIdx){ ctx.strokeStyle = '#e7eae2'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, 9, 0, Math.PI * 2); ctx.stroke(); }
-    });
+    /* t ∈ [0,1]: đường nối mọc dần từ trái sang phải, mỗi chấm bật lên (back-out) khi đường chạm tới */
+    function frame(t){
+      axes();
+      ctx.fillStyle = '#8ea092';
+      ctx.fillText(fmt(x0, 2), padL + 4, h - padB + 14);
+      ctx.fillText(fmt(x1, 2), w - padR - 34, h - padB + 14);
+      ctx.fillText(fmt(y0, 0), 4, h - padB - 2);
+      ctx.fillText(fmt(y1, 0), 4, padT + 10);
+
+      var segs = Math.max(P.length - 1, 1), reach = t * segs;
+      ctx.strokeStyle = 'rgba(91,146,121,0.9)'; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      P.forEach(function(p, k){
+        if (k === 0){ ctx.moveTo(p.x, p.y); return; }
+        if (k - 1 >= reach) return;
+        var f = Math.min(1, reach - (k - 1)), a = P[k - 1];
+        ctx.lineTo(a.x + (p.x - a.x) * f, a.y + (p.y - a.y) * f);
+      });
+      ctx.stroke();
+
+      P.forEach(function(p, k){
+        var born = P.length === 1 ? 0 : k / segs;
+        var u = Math.max(0, Math.min(1, (t - born) / 0.12));
+        if (u <= 0) return;
+        var back = u < 1 ? 1 + 0.45 * Math.sin(u * Math.PI) : 1;
+        var r = (p.q.is_recommended ? 6 : 4.5) * u * back;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = p.q.flagged_non_monotonic ? '#b5602e' : (p.q.is_recommended ? '#e3b568' : '#d4a24e');
+        ctx.fill();
+        if (p.i === pickedIdx && u >= 1){ ctx.strokeStyle = '#e7eae2'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.stroke(); }
+      });
+    }
+
+    if (animate && !reduceMotion && window.gsap){
+      var prog = { t: 0 };
+      frame(0);
+      drawTween = gsap.to(prog, { t: 1, duration: 1.2, delay: 0.1, ease: 'power2.inOut', onUpdate: function(){ frame(prog.t); }, onComplete: function(){ drawTween = null; } });
+    } else {
+      frame(1);
+    }
   }
   window.__drawPareto = drawPareto;
 
@@ -510,7 +545,7 @@
     dotHits.forEach(function(d){ var dist = Math.hypot(d.x - mx, d.y - my); if (dist < bd){ bd = dist; best = d.i; } });
     if (best >= 0) pickPoint(best);
   });
-  window.addEventListener('resize', function(){ if (currentStep === 4) drawPareto(); });
+  window.addEventListener('resize', function(){ if (currentStep === 4) drawPareto(false); });
 
   /* ---------------------------------------------------------------------
      3.7 — Điều hướng wizard: stepper + Back/Next + transition GSAP
@@ -568,7 +603,17 @@
       currentStep = target;
       renderStepper(currentStep);
       updateNav();
-      if (currentStep === 4) drawPareto();
+      var fx = window.MCLPFx;
+      if (currentStep === 4){
+        var cv = document.getElementById('pareto-canvas');
+        cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);   /* bỏ bitmap cũ trước khi width đổi */
+        if (fx) fx.widen(true, null, function(){ drawPareto(true); });   /* canvas chỉ đo/vẽ sau khi width ổn định */
+        else drawPareto(true);
+        if (fx) fx.enterResults();
+        if (window.MCLPCharts) window.MCLPCharts.activate();
+      } else if (fx){
+        fx.widen(false, null);
+      }
     }
 
     if (reduceMotion || !window.gsap){

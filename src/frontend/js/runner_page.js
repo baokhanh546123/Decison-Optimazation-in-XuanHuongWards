@@ -155,7 +155,7 @@
     ids.forEach(function(id){
       var c = candidates.find(function(x){ return x.id === id; });
       if (!perCandidateParams[id]) {
-        perCandidateParams[id] = { demand: 0, conf: parseFloat(c.confidence) };
+        perCandidateParams[id] = { demand: 0.5, conf: parseFloat(c.confidence) };
       }
       var p = perCandidateParams[id];
 

@@ -23,7 +23,6 @@ STATIC_DIR = FRONTEND_DIR / "static"
 JS_DIR = FRONTEND_DIR / "js"
 DATA_DIR = ROOT_DIR / "data"
 CLEAN_GEOJSON = DATA_DIR / "Xuanhuongward" / "XuanHuongWarsFeaturesClean.geojson"
-FEATURED_GEOJSON = DATA_DIR / "Xuanhuongward" / "Xuan Huong Wards_featured.geojson"
 PRECOMPUTED = STATIC_DIR / "candidates.json"
 PRECOMPUTED_ALT = STATIC_DIR / "candidates_xuanhuong.json"
 RUNNER_HTML = TEMPLE_DIR / "runner.html"
@@ -64,8 +63,6 @@ def _ui_tax(root: str) -> str:
 def _resolve_geojson() -> Path | None:
     if CLEAN_GEOJSON.is_file():
         return CLEAN_GEOJSON
-    if FEATURED_GEOJSON.is_file():
-        return FEATURED_GEOJSON
     return None
 
 

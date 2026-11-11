@@ -37,7 +37,7 @@ Ba chế độ (eps_mode)
 - tight:       ε_max = top-P_max costs; auto_reduce theo coverage weight.
 - geographic:  Spatial Decomposition — cluster ứng viên (KMeans/PAM),
                giảm cục bộ từng cụm, hợp nghiệm, rồi ε-sweep trên J đã giảm.
-<<<<<<< HEAD
+
 =======
 - benders:     Benders Decomposition (exact) — master chỉ có x_j + η (KHÔNG
                có y_i / ràng buộc covering, kích thước không phụ thuộc |I|).
@@ -47,7 +47,6 @@ Ba chế độ (eps_mode)
                (Cordeau et al., EJOR 2019) — OR-Tools CP-SAT không expose lazy
                constraint trong 1 cây B&B nên đây là iterative cutting-plane,
                vẫn exact nhưng re-solve master nhiều lần thay vì 1 lần.
->>>>>>> union
 """
 
 import os
@@ -69,10 +68,8 @@ from model.geo_decomp import (
     pam_numpy,
     select_indices_by_cluster,
 )
-<<<<<<< HEAD
-=======
+
 from model.benders_solver import BendersEpsilonTask, solve_one_epsilon_benders
->>>>>>> union
 
 
 class Optimization:
@@ -84,11 +81,8 @@ class Optimization:
         "CPU_COUNT", "utm_epsg", "max_candidates", "eps_mode",
         "early_stop", "early_stop_patience", "early_stop_tol", "re_solve_gap_threshold",
         "n_geo_clusters", "geo_cluster_method", "geo_max_per_cluster",
-<<<<<<< HEAD
-=======
         "benders_max_iters", "benders_master_time_limit_s",
         "_candidate_index_map",
->>>>>>> union
     )
 
     def __init__(
@@ -122,11 +116,8 @@ class Optimization:
         n_geo_clusters: int = 6,
         geo_cluster_method: str = "kmeans",
         geo_max_per_cluster: Optional[int] = None,
-<<<<<<< HEAD
-=======
         benders_max_iters: int = 200,
-        benders_master_time_limit_s: float = 5.0,
->>>>>>> union
+        benders_master_time_limit_s: float = 5.0
     ):
         """
         Parameters
@@ -137,24 +128,12 @@ class Optimization:
             Early-stop **sweep**: dừng khi f1 bão hòa qua `early_stop_patience` điểm.
         re_solve_flagged : bool
             Sau sweep, re-solve điểm non-monotonic hoặc gap > re_solve_gap_threshold.
-<<<<<<< HEAD
         eps_mode : {"notebook", "tight", "geographic"}
-=======
-        eps_mode : {"notebook", "tight", "geographic", "benders"}
->>>>>>> union
         n_geo_clusters : int
             Số cụm không gian (mode geographic).
         geo_cluster_method : {"kmeans", "pam"}
         geo_max_per_cluster : int | None
             Quota ứng viên mỗi cụm; None → chia đều max_candidates.
-<<<<<<< HEAD
-=======
-        benders_max_iters : int
-            Số vòng lặp cutting-plane tối đa mỗi điểm ε (mode benders).
-        benders_master_time_limit_s : float
-            Trần thời gian MỖI lần giải master CP-SAT (không phải tổng) — tổng
-            vẫn bị chặn bởi time_limit_s như các mode khác.
->>>>>>> union
         """
         self.data = data
         self.demand_set = demand_set
